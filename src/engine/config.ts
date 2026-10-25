@@ -1,0 +1,81 @@
+import path from 'node:path';
+
+const packageRoot = path.resolve(__dirname, '../..');
+const cwd = process.cwd();
+const list = (value: string) =>
+  value
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean);
+
+export const config = {
+  packageRoot,
+  brandId: process.env.STUDIO_BRAND_ID ?? 'studio',
+  brandName: process.env.STUDIO_BRAND_NAME ?? 'Studio',
+  templateName: process.env.STUDIO_TEMPLATE_NAME ?? 'app',
+  kitPackage: process.env.STUDIO_KIT_PACKAGE ?? '',
+  kitLabel: process.env.STUDIO_KIT_LABEL ?? '',
+  templateChecks: process.env.STUDIO_TEMPLATE_CHECKS ?? 'npm run typecheck && npm run lint && npm run build',
+  registryScopes: list(process.env.STUDIO_REGISTRY_SCOPES ?? ''),
+  port: Number(process.env.STUDIO_PORT ?? 3105),
+  host: process.env.STUDIO_HOST ?? '0.0.0.0',
+  redis: {
+    host: process.env.REDIS_HOST ?? 'localhost',
+    port: Number(process.env.REDIS_PORT ?? 6379),
+    ...(process.env.REDIS_TLS === 'true' ? { tls: {} } : {}),
+  },
+  previewOrigin: process.env.STUDIO_PREVIEW_ORIGIN ?? 'http://preview.localhost:4300',
+  previewSecret: process.env.STUDIO_PREVIEW_SECRET ?? '',
+  previewParentOrigins: list(process.env.STUDIO_PREVIEW_PARENT_ORIGINS ?? 'http://localhost:4200,http://localhost:5173'),
+  previewAckMs: Number(process.env.STUDIO_PREVIEW_ACK_MS ?? 5000),
+  autoChecks: process.env.STUDIO_AUTO_CHECKS !== 'false',
+  internalKey: process.env.STUDIO_INTERNAL_KEY ?? process.env.COMMERCE_INTERNAL_KEY ?? '',
+  storage: process.env.STUDIO_STORAGE ?? 'local',
+  storageDir: process.env.STUDIO_STORAGE_DIR ?? path.join(cwd, 'static/storage'),
+  bucket: process.env.STUDIO_BUCKET ?? '',
+  region: process.env.AWS_REGION ?? 'us-east-1',
+  workspaces: process.env.STUDIO_WORKSPACES ?? 'docker',
+  sandboxImage: process.env.STUDIO_SANDBOX_IMAGE ?? 'kaboo-studio/sandbox:local',
+  codeInterpreter: process.env.STUDIO_CODE_INTERPRETER ?? 'aws.codeinterpreter.v1',
+  browsers: process.env.STUDIO_BROWSERS ?? 'local',
+  browser: process.env.STUDIO_BROWSER ?? 'aws.browser.v1',
+  npmRegistry: process.env.STUDIO_NPM_REGISTRY ?? 'http://host.docker.internal:4873',
+  codeArtifactDomain: process.env.STUDIO_CODEARTIFACT_DOMAIN ?? '',
+  codeArtifactOwner: process.env.STUDIO_CODEARTIFACT_OWNER ?? '',
+  toolchainScripts: process.env.STUDIO_TOOLCHAIN_SCRIPTS ?? path.join(packageRoot, 'toolchain'),
+  templateDir: process.env.STUDIO_TEMPLATE_DIR ?? path.join(cwd, 'template'),
+  sessionIdleMs: Number(process.env.STUDIO_SESSION_IDLE_MS ?? 15 * 60_000),
+  runIdleMs: Number(process.env.STUDIO_RUN_IDLE_MS ?? 10 * 60_000),
+  sessionsPerStore: Number(process.env.STUDIO_SESSIONS_PER_STORE ?? 3),
+  role: (process.env.STUDIO_ROLE ?? 'all') as 'api' | 'worker' | 'all',
+  environment: process.env.STUDIO_ENVIRONMENT ?? 'local',
+  metrics: process.env.STUDIO_METRICS ?? 'off',
+  sandboxTps: Number(process.env.STUDIO_SANDBOX_TPS ?? 25),
+  maxSessions: Number(process.env.STUDIO_MAX_SESSIONS ?? 950),
+  maxBrowsers: Number(process.env.STUDIO_MAX_BROWSERS ?? 950),
+  sessionWaitMs: Number(process.env.STUDIO_SESSION_WAIT_MS ?? 10 * 60_000),
+  callWaitMs: Number(process.env.STUDIO_CALL_WAIT_MS ?? 45_000),
+  sessionPollMs: Number(process.env.STUDIO_SESSION_POLL_MS ?? 2000),
+  buildMemoryMb: Number(process.env.STUDIO_BUILD_MEMORY_MB ?? 3072),
+  checkConcurrency: Number(process.env.STUDIO_CHECK_CONCURRENCY ?? 8),
+  kitUpgradeConcurrency: Number(process.env.STUDIO_KIT_UPGRADE_CONCURRENCY ?? 4),
+  kitUpgradeSchedule: process.env.STUDIO_KIT_UPGRADE_SCHEDULE ?? '0 2 * * *',
+  kitUpgradeSpreadMs: Number(process.env.STUDIO_KIT_UPGRADE_SPREAD_MS ?? 6 * 3600_000),
+  deployStorage: process.env.STUDIO_DEPLOY_STORAGE ?? 'local',
+  deployDir: process.env.STUDIO_DEPLOY_DIR ?? path.join(cwd, 'static/web'),
+  deployBucket: process.env.STUDIO_DEPLOY_BUCKET ?? '',
+  routingStoreArn: process.env.STUDIO_ROUTING_STORE_ARN ?? '',
+  routingFile: process.env.STUDIO_ROUTING_FILE ?? path.join(cwd, 'static/edge/routing.json'),
+  distributionId: process.env.STUDIO_DISTRIBUTION_ID ?? '',
+  routerFile: path.join(packageRoot, 'edge/router.js'),
+  liveUrlTemplate: process.env.STUDIO_LIVE_URL_TEMPLATE ?? 'http://{address}.localhost:4400',
+  localEdgePort: Number(process.env.STUDIO_LOCAL_EDGE_PORT ?? ((process.env.STUDIO_ENVIRONMENT ?? 'local') === 'local' ? 4400 : 0)),
+  localEdgeUpstream: process.env.STUDIO_LOCAL_EDGE_UPSTREAM ?? 'http://localhost:4200',
+  localEdgePlatformPaths: process.env.STUDIO_LOCAL_EDGE_PLATFORM_PATHS ?? '^/(api/)',
+  deployConcurrency: Number(process.env.STUDIO_DEPLOY_CONCURRENCY ?? 4),
+  rerenderConcurrency: Number(process.env.STUDIO_RERENDER_CONCURRENCY ?? 4),
+  rerenderSoonMs: Number(process.env.STUDIO_RERENDER_SOON_MS ?? 3 * 60_000),
+  rerenderHourlyMs: Number(process.env.STUDIO_RERENDER_HOURLY_MS ?? 60 * 60_000),
+};
+
+export const brandTitle = () => config.brandName.replace(/[^A-Za-z0-9]/g, '') || 'Studio';

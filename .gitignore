@@ -1,0 +1,10 @@
+node_modules/
+dist/
+src/generated/
+.yarn/*
+!.yarn/releases
+*.tsbuildinfo
+.env
+static/
+tmp/
+*.tgz

@@ -1,0 +1,112 @@
+{
+  "name": "@pgege/kaboo-studio",
+  "version": "0.1.0",
+  "description": "A builder engine for agents and people: each design is versioned code, edited in sandboxes with type, lint and preview checks, behind one GraphQL schema and host ports.",
+  "license": "MIT",
+  "author": "gl-pgege",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gl-pgege/kaboo-studio.git"
+  },
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./contract": {
+      "types": "./dist/contract/index.d.ts",
+      "default": "./dist/contract/index.js"
+    },
+    "./contract/schema/studio.graphql": "./dist/contract/schema/studio.graphql",
+    "./preview/*": "./dist/preview/*",
+    "./toolchain/*": "./toolchain/*",
+    "./prisma/*": "./prisma/*",
+    "./edge/*": "./edge/*",
+    "./package.json": "./package.json",
+    "./preview-src/*": "./preview/*"
+  },
+  "bin": {
+    "kaboo-studio-migrate": "./bin/migrate.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "prisma",
+    "prisma.config.mjs",
+    "preview/index.html",
+    "preview/src",
+    "preview/vite.config.ts",
+    "preview/tsconfig.json",
+    "preview/package.json",
+    "toolchain",
+    "edge",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "generate": "prisma generate --config prisma.config.mjs",
+    "build": "yarn generate && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs && yarn build:preview",
+    "build:preview": "vite build preview --config preview/vite.config.ts --outDir ../dist/preview --emptyOutDir",
+    "typecheck": "yarn generate && tsc --noEmit -p tsconfig.json && tsc --noEmit -p preview/tsconfig.json",
+    "lint": "eslint src",
+    "test": "node --test test/*.test.mjs test/contract-schema/*.test.mjs preview/test/*.test.mjs",
+    "test:contract": "node --test --test-concurrency=1 test/contract/*.test.mjs",
+    "prepack": "yarn build"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^12.1.2",
+    "@nestjs/core": "^12.1.2",
+    "@nestjs/platform-express": "^12.1.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "dependencies": {
+    "@aws-crypto/sha256-js": "5.2.0",
+    "@aws-sdk/client-bedrock-agentcore": "3.1150.0",
+    "@aws-sdk/client-cloudfront": "3.1150.0",
+    "@aws-sdk/client-cloudfront-keyvaluestore": "3.1150.0",
+    "@aws-sdk/client-codeartifact": "3.1150.0",
+    "@aws-sdk/client-s3": "3.1150.0",
+    "@aws-sdk/credential-providers": "3.1150.0",
+    "@aws-sdk/s3-request-presigner": "3.1150.0",
+    "@aws-sdk/signature-v4a": "3.1138.0",
+    "@axe-core/playwright": "4.14.0",
+    "@graphql-tools/schema": "10.1.4",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "@smithy/signature-v4": "5.7.4",
+    "bullmq": "5.81.5",
+    "diff": "9.0.0",
+    "fflate": "0.8.3",
+    "graphql": "16.14.2",
+    "ioredis": "5.11.1",
+    "pg": "8.23.1",
+    "playwright-core": "1.61.1",
+    "prisma": "7.10.0",
+    "typescript": "6.0.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/common": "12.1.2",
+    "@nestjs/core": "12.1.2",
+    "@nestjs/platform-express": "12.1.2",
+    "@types/express": "5.0.6",
+    "@types/node": "24.19.2",
+    "eslint": "9.39.5",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.1",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "yarn@4.18.1"
+}

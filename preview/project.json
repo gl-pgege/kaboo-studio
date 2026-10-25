@@ -1,0 +1,35 @@
+{
+  "name": "preview",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/preview/src",
+  "targets": {
+    "serve": {
+      "command": "yarn vite",
+      "options": {
+        "cwd": "apps/preview"
+      }
+    },
+    "build": {
+      "command": "yarn vite build",
+      "options": {
+        "cwd": "apps/preview"
+      },
+      "outputs": [
+        "{projectRoot}/dist"
+      ]
+    },
+    "typecheck": {
+      "command": "yarn tsc --noEmit",
+      "options": {
+        "cwd": "apps/preview"
+      }
+    },
+    "test": {
+      "command": "node --test test/*.test.mjs",
+      "options": {
+        "cwd": "apps/preview"
+      }
+    }
+  }
+}

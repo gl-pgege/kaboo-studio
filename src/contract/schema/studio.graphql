@@ -1,0 +1,426 @@
+"Who may use a field when a host mounts it: VIEW for anyone who can see the store's storefront, EDIT for its owners."
+directive @access(level: StudioAccessLevel!) on FIELD_DEFINITION
+
+"A field only the host calls with its internal key; it is never mounted."
+directive @host on FIELD_DEFINITION
+
+enum StudioAccessLevel {
+    VIEW
+    EDIT
+}
+
+scalar JSON
+scalar DateTime
+
+"""
+A storefront design in the Storefront studio: a React site its owners and their assistant edit, kept as numbered
+versions. Staff can see designs, versions, previews and checks, but never the code.
+"""
+type StudioDesign {
+    id: String!
+    name: String!
+    "active, archived, or scratch (a variation an assistant is trying on its own copy)."
+    status: String!
+    "For a variation, the design it was copied from."
+    parentId: String
+    "A hash of every file in the draft; it changes with every edit."
+    draftTree: String!
+    "The latest version's number, or null before the first version."
+    headVersion: Int
+    "The storefront template the design started from."
+    templateVersion: String!
+    "The version of the kit package the design uses."
+    kitVersion: String!
+    "Problems the platform found, such as a kit update that failed its checks."
+    flags: [StudioDesignFlag!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+"A problem the platform found with a design."
+type StudioDesignFlag {
+    "kit-upgrade-failed or checks-failed."
+    kind: String!
+    message: String!
+    "Lines from the failing output."
+    details: [String!]!
+    at: DateTime!
+}
+
+"Who made a version: a person, an assistant on someone's behalf, or the platform."
+type StudioAuthor {
+    "person, assistant or platform."
+    kind: String!
+    name: String!
+    "For an assistant, the person it worked for."
+    actingFor: String
+    "The chat the change came from."
+    chatId: String
+    "The recipe the assistant followed."
+    recipe: String
+}
+
+"The background checks of a version: a clean build, smoke tests on phones, accessibility, the kit's required parts and saved flows."
+type StudioVersionChecks {
+    "pending, passed or failed."
+    status: String!
+    summary: String
+}
+
+"A saved state of a design's code. Versions never change; restoring one makes a new version."
+type StudioDesignVersion {
+    number: Int!
+    "The version it was made from."
+    parent: Int
+    "A hash of every file in the version."
+    tree: String!
+    "What changed, in words."
+    message: String!
+    author: StudioAuthor!
+    checks: StudioVersionChecks
+    createdAt: DateTime!
+}
+
+"A version a run made: one changed design at the end of a chat turn."
+type StudioRunVersion {
+    run: String!
+    design: String!
+    designName: String!
+    version: StudioDesignVersion!
+}
+
+"A link to the design's preview, for the studio page's frame or a teammate."
+type StudioDesignPreview {
+    url: String!
+    expiresAt: DateTime!
+    "The version's tree when the preview is pinned to a version; null for the live draft."
+    tree: String
+}
+
+"A file in a design."
+type StudioDesignFileEntry {
+    path: String!
+    "The sha256 of the contents; send it back as baseHash when saving the file."
+    hash: String!
+}
+
+"The files of a design's draft or of one of its versions."
+type StudioDesignFiles {
+    tree: String!
+    files: [StudioDesignFileEntry!]!
+    "Files the studio keeps as they are; saving them is refused."
+    protected: [String!]!
+}
+
+"One file's contents: text for text files, base64 for anything else."
+type StudioDesignFile {
+    path: String!
+    hash: String!
+    text: String
+    base64: String
+}
+
+"A file to save."
+input StudioDesignFileInput {
+    "The path inside the design, such as app/blocks/Hero.tsx."
+    path: String!
+    "The new text, or null to delete the file."
+    contents: String
+    "The hash of the file as it was when editing started, or null for a new file. A file changed since is not saved."
+    baseHash: String
+}
+
+"A problem found after a change: a compile error, a type error, or a lint error in a changed file."
+type StudioDiagnostic {
+    "compile, types or lint."
+    kind: String!
+    file: String!
+    line: Int
+    column: Int
+    rule: String
+    message: String!
+}
+
+"A file the studio didn't take, and why."
+type StudioRefusedFile {
+    path: String!
+    reason: String!
+}
+
+"What the preview did with a change."
+type StudioPreviewResult {
+    "rendered, errors, compile-errors, no-preview (nobody had it open) or timeout."
+    status: String!
+    "The draft tree it rendered."
+    tree: String
+    "The route it rendered."
+    route: String
+    ms: Float
+    errors: [String!]!
+    "Failed or blocked requests, pictures that didn't load and console errors, each with what to do about it."
+    faults: [String!]!
+}
+
+"What still needs fixing in a design's draft."
+type StudioDesignHealth {
+    "True when nothing needs fixing."
+    ok: Boolean!
+    "The draft tree this is about."
+    draft: String!
+    "Everything that needs fixing, in plain words, most important first."
+    problems: [String!]!
+    "Errors the home page threw just now."
+    errors: [String!]!
+    "Failed or blocked requests, pictures that didn't load and console errors on the home page."
+    faults: [String!]!
+    "Compile, type and lint errors from the latest change."
+    diagnostics: [StudioDiagnostic!]!
+    "False when the draft changed without type and lint checks, such as a save from the Code view."
+    diagnosed: Boolean!
+    "The draft's checks from studio check, or null when they haven't run on this draft."
+    checks: StudioVersionChecks
+}
+
+"The outcome of saving files."
+type StudioDesignSaveResult {
+    "The version the save made, or null when nothing changed."
+    version: StudioDesignVersion
+    "Files someone else changed since baseHash; they weren't saved, so merge them and save again."
+    conflicts: [String!]!
+    changed: [String!]!
+    deleted: [String!]!
+    refused: [StudioRefusedFile!]!
+    diagnostics: [StudioDiagnostic!]!
+    preview: StudioPreviewResult
+    "The draft's new tree, or null when nothing changed."
+    draftTree: String
+}
+
+"A design's code as a zip file."
+type StudioDesignCodeArchive {
+    filename: String!
+    base64: String!
+}
+
+"A picture, such as a screenshot of the preview, as a data URL."
+type StudioImage {
+    url: String!
+    width: Int!
+    height: Int!
+    mimeType: String!
+}
+
+"What a command did in the design's workspace."
+type StudioCommandResult {
+    "What the command printed, trimmed, then the files it changed, what the preview did and any errors, as one text."
+    output: String!
+    "A short label for the step, such as Edited Hero.tsx."
+    summary: String!
+    "The shell command's exit code, or null for studio commands."
+    exitCode: Int
+    changed: [String!]!
+    deleted: [String!]!
+    refused: [StudioRefusedFile!]!
+    "The draft's tree after the command."
+    draft: String
+    diagnostics: [StudioDiagnostic!]!
+    preview: StudioPreviewResult
+    "Problems the platform had while running it, in plain words."
+    faults: [String!]!
+    "Screenshots the command took, such as studio screenshot."
+    screenshots: [StudioImage!]!
+}
+
+"A brand to start a design with: colours as six-digit hex, fonts from the kit's list and a corner radius."
+input StudioBrandInput {
+    primary: String
+    accent: String
+    "Inter, System UI, Georgia, Rounded or Monospace."
+    headingFont: String
+    bodyFont: String
+    "Such as 8px."
+    radius: String
+}
+
+"A problem or a warning found while deploying, on a page or in a file."
+type StudioDeploymentFinding {
+    "A page such as /products/tee, or a file and line such as app/blocks/Hero.tsx:12."
+    path: String!
+    problem: String!
+}
+
+"""
+A production build of one version of a design: every page rendered ahead of time, checked and stored. Shoppers
+see it only once it's live (setLiveStudioDeployment). Its code never changes; its pages are rendered again when
+the catalog changes.
+"""
+type StudioDeployment {
+    id: String!
+    design: String!
+    designName: String!
+    version: Int!
+    "queued, building, ready, failed, or removed (an older deployment whose files were cleared; the newest 10 and any recently live are kept)."
+    status: String!
+    summary: String
+    "Pages in its sitemap."
+    pages: Int!
+    "The version's checks when it was deployed."
+    checks: StudioVersionChecks
+    "Why it failed: the version's checks, the security scan, the build or the SEO checks."
+    problems: [StudioDeploymentFinding!]!
+    "Worth fixing, but they didn't stop it: pages without a description, for example."
+    warnings: [StudioDeploymentFinding!]!
+    "Whether shoppers see it now."
+    live: Boolean!
+    author: StudioAuthor!
+    createdAt: DateTime!
+    finishedAt: DateTime
+    "When pages were last rendered again after catalog changes."
+    renderedAt: DateTime
+}
+
+"What shoppers see on the store's address."
+type StudioRouting {
+    "The live deployment, or null while the store shows the standard storefront."
+    live: StudioDeployment
+    "Whether rollBackStudioDeployment has something to go back to."
+    canRollBack: Boolean!
+    "What rolling back returns to: a deployment, or null for the standard storefront."
+    previous: StudioDeployment
+    "The store's address, where shoppers see the live deployment."
+    url: String
+    "Goes up with every change to what's live."
+    revision: Int!
+    updatedAt: DateTime
+}
+
+"A screen to look at a preview on: a phone 390 wide, or a desktop 1366 wide."
+enum StudioDevice {
+    phone
+    desktop
+}
+
+"What a person is about to do, so the studio can start the design's workspace before they need it."
+enum StudioWarmUp {
+    chat
+    code
+}
+
+"The storefront template new designs start from."
+type StudioTemplateRelease {
+    template: String!
+    version: String!
+    kitVersion: String!
+    publishedAt: DateTime!
+}
+
+"Pages to render again after the store's data changed."
+input StudioRerenderInput {
+    paths: [String!]
+    removed: [String!]
+    all: Boolean
+    "Only the live deployment of this design."
+    design: String
+    "soon or hourly."
+    urgency: String
+}
+
+type Query {
+    "The store's studio designs, newest first: active ones, or archived ones with archived: true."
+    studioDesigns(archived: Boolean): [StudioDesign!]! @access(level: VIEW)
+    "One of the store's studio designs, or null if the store has no such design."
+    studioDesign(id: String!): StudioDesign @access(level: VIEW)
+    "The versions the given runs made, newest first: one per design each run changed."
+    studioRunVersions(runs: [String!]!): [StudioRunVersion!]! @access(level: VIEW)
+    "A design's versions, newest first. Pass before (a version number) to page back."
+    studioDesignVersions(design: String!, before: Int, take: Int): [StudioDesignVersion!]! @access(level: VIEW)
+    "A preview link to the design's draft, or to a version when one is given, opening at path (default /)."
+    studioDesignPreview(design: String!, version: Int, path: String): StudioDesignPreview! @access(level: VIEW)
+    "The latest stored checks of the draft or a version, or null if they haven't run."
+    studioDesignCheck(design: String!, version: Int): JSON @access(level: VIEW)
+    "What still needs fixing in the design's draft: the home page rendered just now in a fresh browser, compile, type and lint errors from the latest change, and the draft's checks. Ask it before ending a turn that changed the design."
+    studioDesignHealth(design: String!): StudioDesignHealth! @access(level: VIEW)
+    "A screenshot of the design's preview (the draft, or a version) at path: the first screen, or the whole page with fullPage. Phone unless device says."
+    studioPreviewShot(design: String!, version: Int, path: String, device: StudioDevice, fullPage: Boolean): StudioImage! @access(level: VIEW)
+    "The preview's page as text, as a shopper's screen reader meets it: headings, links, buttons and text, each with the file and line it comes from, and where the screen ends. Phone unless device says."
+    studioPreviewOutline(design: String!, version: Int, path: String, device: StudioDevice): String! @access(level: VIEW)
+    "Fixed checks of the preview at path: accessibility (axe, WCAG 2.2 AA), lab speed against the budgets and broken links, on phones and desktops unless devices says. Takes up to a minute."
+    studioPreviewAudit(design: String!, version: Int, path: String, devices: [StudioDevice!]): JSON! @access(level: VIEW)
+    "Owners only: the files of the draft, or of a version."
+    studioDesignFiles(design: String!, version: Int): StudioDesignFiles! @access(level: EDIT)
+    "Owners only: one file of the draft or of a version, or null if there's no such file."
+    studioDesignFile(design: String!, path: String!, version: Int): StudioDesignFile @access(level: EDIT)
+    "Owners only: the design's code as a zip (the draft, or a version), to keep or to work on elsewhere."
+    studioDesignCodeArchive(design: String!, version: Int): StudioDesignCodeArchive! @access(level: EDIT)
+    "The store's deployments, newest first, or one design's (take, default 20)."
+    studioDeployments(design: String, take: Int): [StudioDeployment!]! @access(level: VIEW)
+    "What shoppers see on the store's address now, and what Roll back would return to."
+    studioRouting: StudioRouting! @access(level: VIEW)
+    "The latest storefront template."
+    studioTemplate: StudioTemplateRelease! @host
+    "How many jobs wait in each of the studio's queues."
+    studioQueues: JSON @host
+}
+
+type Mutation {
+    "Starts a design from the latest storefront template, with the brand given or else the store's brand."
+    createStudioDesign(name: String!, brand: StudioBrandInput): StudioDesign! @access(level: EDIT)
+    "Copies a design, with its draft, as a new design."
+    duplicateStudioDesign(id: String!, name: String): StudioDesign! @access(level: EDIT)
+    renameStudioDesign(id: String!, name: String!): StudioDesign! @access(level: EDIT)
+    "Hides a design from the list; it can be brought back."
+    archiveStudioDesign(id: String!): StudioDesign! @access(level: EDIT)
+    unarchiveStudioDesign(id: String!): StudioDesign! @access(level: EDIT)
+    "Makes an older version the draft again, saved as a new version."
+    restoreStudioDesignVersion(design: String!, version: Int!): StudioDesignVersion! @access(level: EDIT)
+    """
+    Owners only: saves files as one version. Each file carries the hash it was edited from; a file someone changed
+    since isn't saved and comes back in conflicts. Type and lint errors come back too.
+    """
+    saveStudioDesignFiles(design: String!, files: [StudioDesignFileInput!]!, message: String): StudioDesignSaveResult! @access(level: EDIT)
+    "Changes text written in the design's code, at the element the preview names (file:line:column), as a new version. before is the text as shown; text built from data can't be changed this way."
+    editStudioText(design: String!, at: String!, before: String!, after: String!): StudioDesignSaveResult! @access(level: EDIT)
+    "Changes a picture whose src is written in the design's code, at the element the preview names, to a picture from the store's Assets, as a new version."
+    editStudioImage(design: String!, at: String!, before: String!, after: String!): StudioDesignSaveResult! @access(level: EDIT)
+    "Owners only: formats a file's text with the design's Prettier, without saving it."
+    formatStudioDesignFile(design: String!, path: String!, text: String!): String! @access(level: EDIT)
+    "Starts the design's workspace ahead of a chat or a code edit, so the first change is quick."
+    warmStudioDesign(design: String!, for: StudioWarmUp!): Boolean! @access(level: EDIT)
+    "Runs the version checks now, on the draft or a version, and returns the results."
+    runStudioDesignCheck(design: String!, version: Int): JSON! @access(level: EDIT)
+    """
+    Owners only: runs one bash command in the design's workspace, the storefront's own code with Node, npm, TypeScript,
+    ESLint, Prettier, ripgrep and ast-grep, or a studio command (studio help lists them) such as studio screenshot.
+    The result has the output, the files changed, the new draft, what the preview did, type and lint errors, and any
+    screenshots. The workspace and the design's headless preview stay open between commands.
+    """
+    runStudioCommand(design: String!, command: String!): StudioCommandResult! @access(level: EDIT)
+    """
+    Owners only: builds a version (the latest by default) for shoppers in a fresh workspace, after its checks pass,
+    a security scan and SEO checks. Returns at once with status queued; watch studioDeployments for ready or failed.
+    Shoppers see it only after setLiveStudioDeployment.
+    """
+    deployStudioDesign(design: String!, version: Int): StudioDeployment! @access(level: EDIT)
+    "Owners only: makes a deployment that finished building the one shoppers see on the store's address."
+    setLiveStudioDeployment(deployment: String!): StudioRouting! @access(level: EDIT)
+    "Owners only: goes back to what was live before: the previous deployment, or the standard storefront."
+    rollBackStudioDeployment: StudioRouting! @access(level: EDIT)
+    "Makes a design from files, such as an export."
+    importStudioDesign(name: String!, files: JSON!): StudioDesign! @host
+    "Saves what a run (the principal's by default) changed as one version per changed design, and lets others edit them again."
+    endStudioRun(run: String, summary: String, outcome: String!): [StudioRunVersion!]! @host
+    "Renders pages of the store's live deployment again after its data changed."
+    requestStudioRerender(input: StudioRerenderInput!): JSON @host
+    "Writes the store's address and live deployment to the edge again."
+    syncStudioRouting: Boolean! @host
+    "Moves designs to a kit version, keeping only upgrades whose checks pass."
+    upgradeStudioKit(version: String!, stores: [String!], designs: [String!]): JSON! @host
+    "Queues tonight's kit upgrades for every store."
+    queueStudioKitUpgrades: JSON! @host
+    "Stages the latest template's changes into the design's workspace for a merge."
+    stageStudioTemplateMerge(design: String!): JSON! @host
+    "Saves a staged template merge."
+    finishStudioTemplateMerge(design: String!): StudioDesign! @host
+    "Stops the design's workspace and preview sessions."
+    stopStudioSessions(design: String!): Boolean! @host
+}

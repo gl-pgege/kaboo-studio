@@ -1,0 +1,158 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Design {
+  id              String    @id @default(uuid())
+  store           String
+  name            String
+  status          String    @default("active")
+  templateVersion String
+  kitVersion      String
+  flags           Json      @default("[]")
+  parentId        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  drafts          Draft[]
+  versions        Version[]
+  deployments     Deployment[]
+  runChanges      RunChange[]
+
+  @@index([store, status])
+}
+
+model Draft {
+  id          String    @id @default(uuid())
+  designId    String
+  ref         String    @default("main")
+  tree        String
+  headVersion Int?
+  problems    Json?
+  updatedAt   DateTime  @updatedAt
+  design      Design    @relation(fields: [designId], references: [id], onDelete: Cascade)
+  sessions    Session[]
+
+  @@unique([designId, ref])
+}
+
+model Version {
+  id        String   @id @default(uuid())
+  designId  String
+  ref       String   @default("main")
+  number    Int
+  parent    Int?
+  tree      String
+  message   String
+  author    Json
+  runId     String?
+  createdAt DateTime @default(now())
+  design    Design   @relation(fields: [designId], references: [id], onDelete: Cascade)
+
+  @@unique([designId, number])
+  @@index([designId, ref, number])
+  @@index([runId])
+}
+
+model RunChange {
+  runId    String
+  designId String
+  store    String
+  actor    Json
+  firstAt  DateTime @default(now())
+  lastAt   DateTime @default(now())
+  design   Design   @relation(fields: [designId], references: [id], onDelete: Cascade)
+
+  @@id([runId, designId])
+  @@index([lastAt])
+}
+
+model TreeCheck {
+  store     String
+  tree      String
+  status    String
+  summary   String?
+  results   Json
+  createdAt DateTime @default(now())
+
+  @@id([store, tree])
+}
+
+model BrowserSession {
+  id         String    @id @default(uuid())
+  draftId    String?
+  store      String
+  purpose    String    @default("agent")
+  provider   String
+  externalId String
+  endpoint   String?
+  device     String    @default("phone")
+  status     String    @default("ready")
+  startedAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  stoppedAt  DateTime?
+
+  @@index([draftId, status])
+  @@index([status, lastUsedAt])
+}
+
+model Session {
+  id         String    @id @default(uuid())
+  draftId    String?
+  store      String
+  purpose    String    @default("edit")
+  provider   String
+  externalId String
+  status     String    @default("starting")
+  startedAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  stoppedAt  DateTime?
+  draft      Draft?    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, status])
+  @@index([store, purpose, status])
+  @@index([store, status])
+  @@index([status, lastUsedAt])
+}
+
+model Deployment {
+  id         String    @id @default(uuid())
+  store      String
+  designId   String
+  version    Int
+  tree       String
+  status     String    @default("queued")
+  summary    String?
+  pages      String[]  @default([])
+  results    Json      @default("{}")
+  actor      Json
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  renderedAt DateTime?
+  design     Design    @relation(fields: [designId], references: [id], onDelete: Cascade)
+
+  @@index([store, createdAt])
+  @@index([designId, createdAt])
+}
+
+model StoreRouting {
+  store     String
+  revision  Int
+  config    Json
+  actor     Json
+  createdAt DateTime @default(now())
+
+  @@id([store, revision])
+}
+
+model StoreRoute {
+  store     String   @id
+  key       String
+  value     String?
+  updatedAt DateTime @updatedAt
+}
