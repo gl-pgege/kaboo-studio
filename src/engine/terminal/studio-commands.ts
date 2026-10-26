@@ -6,6 +6,7 @@ import type { TerminalCaller } from '../ports';
 import { BrowserCommands } from '../browser/browser-commands';
 import { BrowserSessions } from '../browser/browser-sessions.service';
 import { VersionChecks } from '../checks/version-checks.service';
+import { config } from '../config';
 import { DesignService } from '../designs/design.service';
 import { DraftService } from '../drafts/draft.service';
 import { isAssistantWriter } from '../drafts/writers.service';
@@ -124,7 +125,7 @@ export class StudioCommands {
     if (action === 'use') {
       const variation = await this.designs.variation(caller.store, main, name);
       const { draft } = await this.designs.get(variation.id, caller.store);
-      const outcome = await this.drafts.change(main, caller.store, caller.actor, { kind: 'tree', tree: draft.tree }, { owner: ownerOf(caller), ownerTtlMs: 20 * 60_000, diagnose: true });
+      const outcome = await this.drafts.change(main, caller.store, caller.actor, { kind: 'tree', tree: draft.tree }, { owner: ownerOf(caller), ownerTtlMs: 20 * 60_000, diagnose: config.diagnoseOnChange });
       const version = await this.drafts.commit(main, caller.store, caller.actor, `Used the ${name} variation`);
       return { text: `The design now matches variation ${name}${version ? ` (version ${version.number})` : ''}.`, result: outcome.result };
     }

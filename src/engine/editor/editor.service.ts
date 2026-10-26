@@ -66,7 +66,7 @@ export class EditorService {
       store,
       actor,
       { kind: 'files', write, delete: remove },
-      run ? { owner, ownerTtlMs: RUN_HOLD_MS, diagnose: true } : { owner, releaseAfter: true, diagnose: true },
+      run ? { owner, ownerTtlMs: RUN_HOLD_MS, diagnose: config.diagnoseOnChange } : { owner, releaseAfter: true, diagnose: config.diagnoseOnChange },
     );
     const names = [...outcome.result.changed, ...outcome.result.deleted];
     const version =

@@ -57,7 +57,7 @@ export class PreviewService {
     return this.storage.get(`stores/${store}/modules/${hash}`);
   }
 
-  async publish(design: Design, tree: string, sync: SyncResult, session: OpenSession, compileAll: () => Promise<SyncResult>): Promise<PreviewResult> {
+  async publish(design: Design, tree: string, sync: SyncResult, session: OpenSession, compileAll: () => Promise<SyncResult>, { wait = true } = {}): Promise<PreviewResult> {
     const compileErrors: PreviewResult = { status: 'compile-errors', tree: null, route: null, ms: null, errors: [], faults: [] };
     if (sync.compileErrors.length) {
       await this.channel.publishError(design.id, tree, sync.compileErrors);
@@ -70,6 +70,7 @@ export class PreviewService {
     const seq = await this.channel.nextSeq(design.id);
     await this.channel.publishUpdate(design.id, { tree, seq, manifest: tree, modules: update.changed, deleted: update.deleted, css: update.manifest.css, reload: update.reload });
     metrics.stage('publish', performance.now() - started);
+    if (!wait) return { status: 'published', tree, route: null, ms: null, errors: [], faults: [] };
     const result = await metrics.time('ack', () => this.channel.result(design.id, tree));
     if (result.status === 'timeout') metrics.count('PreviewAckTimeouts');
     return result;

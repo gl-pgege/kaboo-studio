@@ -60,6 +60,20 @@ test("an assistant's save keeps the run's hold and leaves the version to the run
   assert.equal(commits.length, 0);
 });
 
+test('a save is checked as it lands unless the host checks on demand', async () => {
+  const { config } = await import('../dist/engine/config.js');
+  const { editor, changes } = fakes({ 'a.ts': sha('a') });
+  await editor.save('d1', 'north', person, [{ path: 'a.ts', contents: 'b', baseHash: sha('a') }]);
+  assert.equal(changes[0].options.diagnose, true);
+  config.diagnoseOnChange = false;
+  try {
+    await editor.save('d1', 'north', person, [{ path: 'a.ts', contents: 'c', baseHash: sha('a') }]);
+    assert.equal(changes[1].options.diagnose, false);
+  } finally {
+    config.diagnoseOnChange = true;
+  }
+});
+
 test('an assistant run owns its writes for the whole run, a person only for the save', async () => {
   const { editor, changes } = fakes({ 'a.ts': sha('a') });
   await editor.save('d1', 'north', { kind: 'assistant', name: 'Builder', runId: 'run-7' }, [{ path: 'a.ts', contents: 'b', baseHash: sha('a') }]);

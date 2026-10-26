@@ -28,6 +28,7 @@ export const config = {
   previewSecret: process.env.STUDIO_PREVIEW_SECRET ?? '',
   previewParentOrigins: list(process.env.STUDIO_PREVIEW_PARENT_ORIGINS ?? 'http://localhost:4200,http://localhost:5173'),
   previewAckMs: Number(process.env.STUDIO_PREVIEW_ACK_MS ?? 5000),
+  diagnoseOnChange: process.env.STUDIO_DIAGNOSE_ON_CHANGE !== 'false',
   autoChecks: process.env.STUDIO_AUTO_CHECKS !== 'false',
   internalKey: process.env.STUDIO_INTERNAL_KEY ?? process.env.COMMERCE_INTERNAL_KEY ?? '',
   storage: process.env.STUDIO_STORAGE ?? 'local',

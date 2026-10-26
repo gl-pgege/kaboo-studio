@@ -18,6 +18,7 @@ const MAX_OUTPUT = 512 * 1024;
 
 const root = process.cwd();
 const stateDir = path.join(root, '.studio', 'state');
+const SINCE = path.join(stateDir, 'types-since.json');
 const argv = process.argv.slice(2);
 const flag = name => argv.includes(name);
 const option = name => {
@@ -186,8 +187,10 @@ export function lintErrors(reports) {
 }
 
 function alive(pidFile) {
+  const pid = Number(readFileSyncSafe(pidFile));
+  if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
-    process.kill(Number(readFileSyncSafe(pidFile)), 0);
+    process.kill(pid, 0);
     return true;
   } catch {
     return false;
@@ -222,19 +225,79 @@ async function waitForTypes(offset, timeoutMs) {
   return null;
 }
 
+function coldTypes() {
+  return typeErrors(spawnSync('npx', ['--no-install', 'tsc', '--noEmit', '--pretty', 'false'], { cwd: root, encoding: 'utf8', timeout: 300_000 }).stdout ?? '');
+}
+
+function typegen() {
+  spawnSync('npx', ['--no-install', 'react-router', 'typegen'], { cwd: root, encoding: 'utf8', timeout: 60_000 });
+}
+
+function watching() {
+  return existsSync(path.join(stateDir, 'tsc.log')) && alive(path.join(stateDir, 'tsc.pid'));
+}
+
 async function diagnose(touched, offset) {
   const started = performance.now();
   const packagesChanged = touched.includes('package-lock.json');
   const typedChange = packagesChanged || touched.some(file => TYPED.test(file));
-  if (touched.some(file => ROUTE_SHAPE.test(file))) spawnSync('npx', ['--no-install', 'react-router', 'typegen'], { cwd: root, encoding: 'utf8', timeout: 60_000 });
+  if (touched.some(file => ROUTE_SHAPE.test(file))) typegen();
   let types = [];
-  if (typedChange) {
-    const watching = !packagesChanged && existsSync(path.join(stateDir, 'tsc.log')) && alive(path.join(stateDir, 'tsc.pid'));
-    types = (watching ? await waitForTypes(offset, 8000) : null) ?? typeErrors(spawnSync('npx', ['--no-install', 'tsc', '--noEmit', '--pretty', 'false'], { cwd: root, encoding: 'utf8', timeout: 300_000 }).stdout ?? '');
+  if (typedChange) types = (!packagesChanged && watching() ? await waitForTypes(offset, 8000) : null) ?? coldTypes();
+  timings.typesMs = Math.round(performance.now() - started);
+  return { types, lint: await lintFiles(touched) };
+}
+
+export function latestTypes(log, offset) {
+  const fresh = log.slice(offset);
+  const end = fresh.lastIndexOf('Found ');
+  const begin = Math.max(fresh.lastIndexOf('Starting incremental compilation'), fresh.lastIndexOf('Starting compilation in watch mode'));
+  if (end < 0 || begin < 0 || begin > end || !/Found \d+ errors?\. Watching for file changes/.test(fresh.slice(end))) return null;
+  return typeErrors(fresh.slice(begin, end));
+}
+
+async function typesNow(since) {
+  const started = performance.now();
+  if (since?.typegen) typegen();
+  let types = null;
+  if (!since?.typegen && !since?.packages && watching()) {
+    for (let waited = 0; waited < 8000 && types === null; waited += 40) {
+      types = latestTypes(readFileSyncSafe(path.join(stateDir, 'tsc.log')), since?.offset ?? 0);
+      if (types === null) await sleep(40);
+    }
   }
   timings.typesMs = Math.round(performance.now() - started);
+  return types ?? coldTypes();
+}
+
+async function noteUnchecked(changed, deleted, known, offset) {
+  const touched = [...changed.map(entry => entry.path), ...deleted];
+  const packages = touched.includes('package-lock.json');
+  const reshaped = touched.some(file => file === 'app/routes.ts' || file === 'app/root.tsx') || [...changed.filter(entry => !known.files[entry.path]).map(entry => entry.path), ...deleted].some(file => file.startsWith('app/routes/'));
+  if (!packages && !reshaped && !touched.some(file => TYPED.test(file))) return;
+  const before = await readJson(SINCE, null);
+  await writeFile(SINCE, JSON.stringify({ offset, packages: Boolean(before?.packages || packages), typegen: Boolean(before?.typegen || reshaped) }));
+}
+
+async function check(known, { noCompile = false } = {}) {
+  const files = Object.keys(known.files);
+  const result = { tree: known.tree, previousTree: known.tree, changed: [], deleted: [], refused: [], modules: {}, compileErrors: [], css: null, cssAssets: [], command: null };
+  if (!noCompile) {
+    const compileStarted = performance.now();
+    const sources = await moduleSources(files);
+    result.compileErrors = (await compileModules([...sources.keys()], sources, { tag: false })).errors;
+    timings.compileMs = Math.round(performance.now() - compileStarted);
+  }
+  const since = await readJson(SINCE, null);
+  result.types = await typesNow(since);
+  result.lint = await lintFiles(files);
+  await rm(SINCE, { force: true });
+  return result;
+}
+
+async function lintFiles(files) {
   const lintStarted = performance.now();
-  const lintable = touched.filter(file => LINTABLE.test(file) && existsSync(path.join(root, file)));
+  const lintable = files.filter(file => LINTABLE.test(file) && existsSync(path.join(root, file)));
   let lint = [];
   if (lintable.length) {
     let reports = null;
@@ -259,7 +322,7 @@ async function diagnose(touched, offset) {
     lint = lintErrors(reports);
   }
   timings.lintMs = Math.round(performance.now() - lintStarted);
-  return { types, lint };
+  return lint;
 }
 
 async function promote(expected) {
@@ -294,6 +357,10 @@ async function main() {
   await mkdir(stateDir, { recursive: true });
   const tscOffset = tscLogSize();
   if (step.promote) await promote(step.promote);
+  if (step.check) {
+    const known = await readJson(path.join(stateDir, 'known.json'), { tree: null, files: {} });
+    return answer(await check(known, { noCompile: Boolean(step.noCompile) || flag('--no-compile') }), started);
+  }
   if (step.replaceAll) {
     const existing = await walk(root, '', []);
     const keep = new Set(Object.keys(step.write ?? {}));
@@ -377,12 +444,17 @@ async function main() {
   result.lint = [];
   const touched = [...changed.map(entry => entry.path), ...deleted];
   if (step.diagnose && touched.length) Object.assign(result, await diagnose(touched, tscOffset));
+  else if (touched.length) await noteUnchecked(changed, deleted, known, tscOffset);
   if (flag('--promote') || step.promoteNow) await writeFile(path.join(stateDir, 'known.json'), JSON.stringify({ tree, files: current }));
+  await answer(result, started);
+}
+
+async function answer(result, started) {
   timings.totalMs = Math.round(performance.now() - started);
   result.timings = timings;
-  const answer = JSON.stringify(result);
-  await writeFile(path.join(stateDir, 'result.json'), answer);
-  process.stdout.write(`\n@@STUDIO_RESULT@@${answer}`);
+  const text = JSON.stringify(result);
+  await writeFile(path.join(stateDir, 'result.json'), text);
+  process.stdout.write(`\n@@STUDIO_RESULT@@${text}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

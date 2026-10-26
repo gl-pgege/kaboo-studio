@@ -72,6 +72,17 @@ design the run changed. File saves check each file's `baseHash`, the hash the
 writer last saw, so a stale whole-file write comes back as a conflict instead
 of overwriting someone else's work.
 
+## Checks
+
+By default each change is checked as it lands: the type check, lint on the
+changed files and the preview's render come back with it. With
+`STUDIO_DIAGNOSE_ON_CHANGE=false` a change only compiles the files it touched
+(a syntax error still comes back at once), updates the preview without waiting
+for it to render, and says it was not checked. `studioDesignHealth` then checks
+the latest draft once: it compiles every module, reads the type watcher's pass
+after the last change (or runs `tsc` when routes or packages changed), lints
+every app file, renders the home page, and keeps the result for that draft.
+
 ## Configuration
 
 Environment variables, read when the engine loads. A host that wants its own
@@ -84,6 +95,7 @@ defaults sets them before importing the module.
 | `STUDIO_TEMPLATE_NAME` | `app` | The template releases come from (`templates/<name>-latest.json` in storage) |
 | `STUDIO_KIT_PACKAGE`, `STUDIO_KIT_LABEL` | none | The package kit upgrades install, and how version messages name it |
 | `STUDIO_TEMPLATE_CHECKS` | `npm run typecheck && npm run lint && npm run build` | What a kit upgrade must pass |
+| `STUDIO_DIAGNOSE_ON_CHANGE` | `true` | `false` checks on demand: a command or save only compiles what changed and updates the preview, and the design's health runs the type check, lint and page render once, on the latest draft |
 | `STUDIO_REGISTRY_SCOPES` | none | npm scopes sandboxes resolve from the registry too |
 | `STUDIO_NPM_REGISTRY`, `STUDIO_CODEARTIFACT_DOMAIN`, `STUDIO_CODEARTIFACT_OWNER` | Verdaccio on the host | Where sandboxes install packages; they have no internet |
 | `STUDIO_WORKSPACES` | `docker` | `docker` locally, `agentcore` for AgentCore Code Interpreter |

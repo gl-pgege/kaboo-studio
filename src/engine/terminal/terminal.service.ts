@@ -2,6 +2,7 @@ import type { ChangeResult } from '../../contract';
 import { Injectable, Logger } from '@nestjs/common';
 import type { TerminalCaller } from '../ports';
 import { BrowserSessions } from '../browser/browser-sessions.service';
+import { config } from '../config';
 import { DesignService } from '../designs/design.service';
 import { DraftService } from '../drafts/draft.service';
 import { formatResult, splitArgs, summarize } from './output';
@@ -71,7 +72,7 @@ export class TerminalService {
     }
     void this.openAgentPreview(caller);
     const outcome = await metrics.time('command', () =>
-      this.drafts.change(caller.designId, caller.store, caller.actor, { kind: 'command', command: line, timeoutMs: MAX_COMMAND_MS }, { owner: ownerOf(caller), ownerTtlMs: 20 * 60_000, diagnose: true, releaseAfter: !caller.actor.runId }),
+      this.drafts.change(caller.designId, caller.store, caller.actor, { kind: 'command', command: line, timeoutMs: MAX_COMMAND_MS }, { owner: ownerOf(caller), ownerTtlMs: 20 * 60_000, diagnose: config.diagnoseOnChange, releaseAfter: !caller.actor.runId }),
     );
     return { text: formatResult(outcome.result), summary: summarize(line, outcome.result), result: outcome.result, images: [] };
   }

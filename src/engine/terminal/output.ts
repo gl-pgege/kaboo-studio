@@ -43,6 +43,7 @@ function previewStatus(result: ChangeResult): string {
   if (view.status === 'no-preview') return 'Preview: none is open, so nothing was rendered';
   if (view.status === 'timeout') return "Preview: didn't confirm within 5 s, which usually means an infinite loop or a crash";
   if (view.status === 'compile-errors') return 'Preview: kept the last good render because of the compile errors below';
+  if (view.status === 'published') return `Preview: updated to ${short(view.tree)}`;
   const where = `${short(view.tree)} on ${view.route ?? '/'} in ${view.ms ?? '?'} ms`;
   if (view.status === 'errors') return [`Preview: rendered ${where}, with runtime errors (the last good render stays on screen):`, ...view.errors.slice(0, 10).map(error => `  ${error}`)].join('\n');
   return `Preview: rendered ${where}, no errors`;
@@ -64,7 +65,9 @@ export function formatResult(result: ChangeResult): string {
   }
   for (const refused of result.refused) lines.push(`Refused: ${refused.path} — ${refused.reason}`);
   if (result.compileErrors.length) lines.push(...list('Compile', result.compileErrors));
-  if (touched.length) {
+  if (touched.length && result.diagnosed === false) {
+    lines.push("Not checked yet: types, lint and how the page runs. Check them once, with the design's health, when your changes are done.");
+  } else if (touched.length) {
     lines.push(...list('Types', result.types));
     lines.push(...list('Lint (changed files)', result.lint));
   }

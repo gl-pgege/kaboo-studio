@@ -149,7 +149,7 @@ type StudioRefusedFile {
 
 "What the preview did with a change."
 type StudioPreviewResult {
-    "rendered, errors, compile-errors, no-preview (nobody had it open) or timeout."
+    "rendered, errors, compile-errors, no-preview (nobody had it open), timeout, or published (sent without waiting for it to render; the design's health renders it)."
     status: String!
     "The draft tree it rendered."
     tree: String

@@ -60,6 +60,19 @@ test('a result names the files, the draft, the preview and the checks', () => {
   );
 });
 
+test('a change nobody checked says so instead of listing no errors', () => {
+  const text = formatResult({
+    ...empty,
+    changed: ['app/routes/home.tsx'],
+    draft: 'bbbbbbbb22',
+    preview: { status: 'published', tree: 'bbbbbbbb22', route: null, ms: null, errors: [], faults: [] },
+    diagnosed: false,
+  });
+  assert.match(text, /Preview: updated to bbbbbbbb/);
+  assert.match(text, /Not checked yet: types, lint and how the page runs/);
+  assert.doesNotMatch(text, /Types: no errors/);
+});
+
 test('a preview that never answered, or kept the last good render, says so', () => {
   const changed = { ...empty, changed: ['app/a.tsx'], draft: 'c' };
   assert.match(formatResult({ ...changed, preview: { status: 'timeout', tree: null, route: null, ms: null, errors: [] } }), /didn't confirm within 5 s/);

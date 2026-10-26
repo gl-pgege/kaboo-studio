@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { treeId as sandboxTreeId } from '../toolchain/sync.mjs';
+import { existsSync } from 'node:fs';
+import { latestTypes, treeId as sandboxTreeId } from '../toolchain/sync.mjs';
 import { parseSyncOutput } from '../dist/engine/drafts/sync-result.js';
 import { treeId } from '../dist/engine/versions/tree.js';
 
@@ -79,6 +80,41 @@ test('writes and deletes apply before the scan, and a failing command still repo
   assert.equal(result.command.exitCode, 3);
   assert.deepEqual(result.changed.map(entry => entry.path), ['app/new.ts']);
   assert.deepEqual(result.deleted, ['app/blocks/Hero.tsx']);
+});
+
+test('a type pass still running is not read as the answer', () => {
+  const log = 'Starting compilation in watch mode...\nFound 0 errors. Watching for file changes.\nFile change detected. Starting incremental compilation...\n';
+  assert.equal(latestTypes(log, 0), null);
+  assert.deepEqual(latestTypes(`${log}Found 0 errors. Watching for file changes.\n`, 0), []);
+  assert.equal(latestTypes(`${log}Found 0 errors. Watching for file changes.\n`, log.length), null);
+});
+
+test('a change nobody checks notes where the type watcher had got to', async () => {
+  await writeFile(path.join(dir, '.studio/state/tsc.log'), 'old output\n');
+  const changed = await step({ run: "printf 'export const a = 1' > app/blocks/Kpi.tsx" });
+  assert.deepEqual(changed.types, []);
+  const since = JSON.parse(await readFile(path.join(dir, '.studio/state/types-since.json'), 'utf8'));
+  assert.deepEqual(since, { offset: 'old output\n'.length, packages: false, typegen: false });
+  await step({ promote: changed.tree });
+});
+
+test("a check reads the watcher's first full pass after the latest change, then forgets the change", async () => {
+  const before = 'Starting compilation in watch mode...\nFound 0 errors. Watching for file changes.\n';
+  await put('node_modules/.bin/eslint', "#!/bin/sh\necho '[]'\n");
+  await chmod(path.join(dir, 'node_modules/.bin/eslint'), 0o755);
+  await writeFile(path.join(dir, '.studio/state/tsc.pid'), String(process.pid));
+  await writeFile(path.join(dir, '.studio/state/tsc.log'), before);
+  const changed = await step({ run: 'printf \'export const a: number = "x"\' > app/blocks/Kpi.tsx' });
+  await writeFile(
+    path.join(dir, '.studio/state/tsc.log'),
+    `${before}File change detected. Starting incremental compilation...\napp/blocks/Kpi.tsx(1,14): error TS2322: Type 'string' is not assignable to type 'number'.\nFound 1 error. Watching for file changes.\n`,
+  );
+  const checked = await step({ promote: changed.tree, check: true });
+  assert.equal(checked.previousTree, changed.tree);
+  assert.deepEqual(checked.changed, []);
+  assert.deepEqual(checked.types, [{ file: 'app/blocks/Kpi.tsx', line: 1, column: 14, rule: 'TS2322', message: "Type 'string' is not assignable to type 'number'." }]);
+  assert.equal(existsSync(path.join(dir, '.studio/state/types-since.json')), false);
+  await rm(path.join(dir, '.studio/state/tsc.pid'));
 });
 
 test('writes cannot leave the design folder', async () => {

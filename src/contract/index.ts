@@ -80,7 +80,7 @@ export type Diagnostic = z.infer<typeof diagnosticSchema>;
 export const previewAckSchema = z.object({ tree: z.string().nullable(), route: z.string().nullish(), ms: z.number().nullish(), errors: z.array(z.string()), faults: z.array(z.string()).default([]) });
 export type PreviewAck = z.infer<typeof previewAckSchema>;
 
-export const previewResultSchema = previewAckSchema.extend({ status: z.enum(['rendered', 'errors', 'compile-errors', 'no-preview', 'timeout']) });
+export const previewResultSchema = previewAckSchema.extend({ status: z.enum(['rendered', 'errors', 'compile-errors', 'no-preview', 'timeout', 'published']) });
 export type PreviewResult = z.infer<typeof previewResultSchema>;
 
 export const changeResultSchema = z.object({
@@ -94,6 +94,7 @@ export const changeResultSchema = z.object({
   lint: z.array(diagnosticSchema),
   preview: previewResultSchema.nullable(),
   command: z.object({ output: z.string(), exitCode: z.number().int(), durationMs: z.number().int() }).nullable(),
+  diagnosed: z.boolean().optional(),
 });
 export type ChangeResult = z.infer<typeof changeResultSchema>;
 

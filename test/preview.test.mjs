@@ -72,6 +72,15 @@ test('a first preview compiles the whole tree, then each change only sends what 
   assert.equal(manifest.css, sha('.a{}'));
 });
 
+test('a change nobody checks is published without waiting for the preview to answer', async () => {
+  const { preview, published } = fakes();
+  const full = sync({ tree: 't1', previousTree: 't1', modules: { 'app/root.tsx': module('root'), 'app/blocks/Hero.tsx': module('hero') } });
+  await preview.publish(design, 't1', sync({ previousTree: null }), {}, async () => full);
+  const result = await preview.publish(design, 't2', sync({ changed: [{ path: 'app/blocks/Hero.tsx' }], modules: { 'app/blocks/Hero.tsx': module('hero 2') } }), {}, async () => full, { wait: false });
+  assert.deepEqual(result, { status: 'published', tree: 't2', route: null, ms: null, errors: [], faults: [] });
+  assert.equal(published.length, 2);
+});
+
 test('root, routes, packages and deletions reload the preview; compile errors publish nothing new', async () => {
   const { preview, published } = fakes();
   const full = sync({ tree: 't1', previousTree: 't1', modules: { 'app/root.tsx': module('root'), 'app/blocks/Hero.tsx': module('hero') } });

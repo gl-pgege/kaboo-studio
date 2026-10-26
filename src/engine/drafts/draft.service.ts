@@ -59,6 +59,7 @@ interface StepPayload {
   allowProtected?: boolean;
   compileAll?: boolean;
   diagnose?: boolean;
+  check?: boolean;
 }
 
 export class OutOfSyncError extends Error {
@@ -143,7 +144,7 @@ export class DraftService {
     const preview =
       tree !== draft.tree
         ? await this.preview
-            .publish(design, tree, sync, session, () => this.run(session, { promote: tree, compileAll: true }))
+            .publish(design, tree, sync, session, () => this.run(session, { promote: tree, compileAll: true }), { wait: diagnose })
             .catch(error => {
               this.logger.warn(`Publishing the preview of ${design.id} failed: ${String(error)}`);
               return null;
@@ -165,8 +166,28 @@ export class DraftService {
         lint: sync.lint ?? [],
         preview,
         command: sync.command,
+        diagnosed: diagnose,
       },
     };
+  }
+
+  async diagnose(designId: string, store: string): Promise<DraftProblems> {
+    const { draft: initial } = await this.designs.get(designId, store);
+    return this.writers.exclusive(initial.id, async () => {
+      const { design, draft } = await this.designs.get(designId, store);
+      const recorded = draft.problems as unknown as DraftProblems | null;
+      if (recorded?.tree === draft.tree) return recorded;
+      const session = await this.workspaces.forDraft(design, draft);
+      const sync = await metrics.time('diagnose', () => this.run(session, { promote: draft.tree, check: true }));
+      if (sync.previousTree !== draft.tree) {
+        await this.workspaces.discard(draft.id);
+        throw new OutOfSyncError();
+      }
+      const problems: DraftProblems = { tree: draft.tree, compile: sync.compileErrors, types: sync.types ?? [], lint: sync.lint ?? [] };
+      await this.versions.recordProblems(draft.id, problems as never);
+      await this.workspaces.touch(session);
+      return problems;
+    });
   }
 
   private async save(store: string, draft: Draft, base: TreeFiles, sync: SyncResult): Promise<TreeFiles> {

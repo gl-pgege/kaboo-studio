@@ -197,8 +197,11 @@ export class StudioGraph {
         const store = storeOf(ctx);
         const { draft } = await this.design(ctx, args.design);
         const recorded = draft.problems as unknown as DraftProblems | null;
-        const known = recorded?.tree === draft.tree ? recorded : null;
-        const [render, checked] = await Promise.all([this.views.health(store, designId(args.design)), this.checks.result(store, draft.tree)]);
+        const [known, render, checked] = await Promise.all([
+          recorded?.tree === draft.tree ? recorded : config.diagnoseOnChange ? null : this.drafts.diagnose(designId(args.design), store),
+          this.views.health(store, designId(args.design)),
+          this.checks.result(store, draft.tree),
+        ]);
         const at = (item: Diagnostic) => `${item.file}${item.line ? `:${item.line}` : ''}`;
         const problems = [
           ...(known?.compile ?? []).map(item => `Compile error in ${at(item)}: ${item.message}`),
