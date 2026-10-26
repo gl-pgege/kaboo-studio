@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 (2026-10-26)
+
+- An agent page that fails, such as a browser that cannot launch, rejects only
+  for its caller. Before, the queue's cleanup left a second rejection unhandled,
+  and Node stopped the whole service.
+
 ## 0.2.0 (2026-10-26)
 
 - `STUDIO_DIAGNOSE_ON_CHANGE=false` checks on demand. A command or save

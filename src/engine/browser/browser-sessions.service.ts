@@ -57,9 +57,10 @@ export class BrowserSessions implements OnModuleInit {
     const previous = this.queues.get(draft.id) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(() => this.agentPage(design, draft, options, work));
     this.queues.set(draft.id, next);
-    void next.finally(() => {
+    const forget = () => {
       if (this.queues.get(draft.id) === next) this.queues.delete(draft.id);
-    });
+    };
+    next.then(forget, forget);
     return next;
   }
 

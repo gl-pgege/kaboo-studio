@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { BrowserSessions } from '../dist/engine/browser/browser-sessions.service.js';
 import { stableTarget } from '../dist/engine/browser/flows.js';
 import { formatOutline, outlineChanges, parseSnapshot } from '../dist/engine/browser/page-outline.js';
 import { withoutTokens } from '../dist/engine/terminal/output.js';
@@ -59,4 +60,23 @@ test('preview tokens never reach the agent', () => {
   assert.equal(withoutTokens(`net::ERR at http://preview.localhost:4300/d/44d5/${token}/products/x`), 'net::ERR at http://preview.localhost:4300/d/44d5/<preview>/products/x');
   assert.equal(withoutTokens(`GET /_studio/check/${token}/assets/a.js`), 'GET /_studio/check/<preview>/assets/a.js');
   assert.equal(withoutTokens('plain output'), 'plain output');
+});
+
+test('a page that fails to open rejects for its caller and leaves nothing unhandled to stop the process', async () => {
+  const sessions = Object.create(BrowserSessions.prototype);
+  sessions.queues = new Map();
+  sessions.agentPage = async () => {
+    throw new Error("browserType.launch: Executable doesn't exist");
+  };
+  const unhandled = [];
+  const listen = reason => unhandled.push(reason);
+  process.on('unhandledRejection', listen);
+  try {
+    await assert.rejects(sessions.withAgentPage({}, { id: 'draft-1' }, {}, async () => 'drawn'), /Executable doesn't exist/);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+    assert.equal(sessions.queues.size, 0);
+  } finally {
+    process.off('unhandledRejection', listen);
+  }
 });
