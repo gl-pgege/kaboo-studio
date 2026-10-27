@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3 (2026-10-27)
+
+- A terminal command holds up to 100,000 characters, up from 20,000, so one
+  command can write several files. The toolchain runs it from a script file
+  instead of a `bash -c` argument, which Linux caps at 128 KB.
+- The agent's preview page opens only when a browser command needs it. Before,
+  the first terminal command, or warming a design for chat, opened it, and every
+  later change re-rendered it and ran its queries again for a page nobody was
+  looking at. A command's preview result is `no-preview` when no page watches
+  the design; health still draws the page.
+
 ## 0.2.2 (2026-10-27)
 
 - Health, screenshots and outlines wait on what the page says about itself. A

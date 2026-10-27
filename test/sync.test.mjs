@@ -51,6 +51,14 @@ test('a command runs, its output comes back and only changed files are sent', as
   assert.equal(result.changed[0].text, 'hero 2');
 });
 
+test('a command longer than one shell argument can hold still runs', async () => {
+  const body = 'é'.repeat(70_000);
+  const result = await step({ run: `cat > app/blocks/Long.tsx <<'EOF'\n${body}\nEOF` });
+  assert.equal(result.command.exitCode, 0);
+  assert.equal(result.changed.find(entry => entry.path === 'app/blocks/Long.tsx')?.text, `${body}\n`);
+  await rm(path.join(dir, 'app/blocks/Long.tsx'));
+});
+
 test('nothing is promoted until the studio confirms the saved tree', async () => {
   const again = await step({});
   assert.deepEqual(again.changed.map(entry => entry.path), ['app/blocks/Hero.tsx']);

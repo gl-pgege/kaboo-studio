@@ -1,6 +1,6 @@
 {
   "name": "@pgege/kaboo-studio",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A builder engine for agents and people: each design is versioned code, edited in sandboxes with type, lint and preview checks, behind one GraphQL schema and host ports.",
   "license": "MIT",
   "author": "gl-pgege",

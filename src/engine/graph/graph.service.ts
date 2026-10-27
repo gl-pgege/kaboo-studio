@@ -88,6 +88,7 @@ function nameOf(name: string): string {
 }
 
 const clamp = (value: number | null | undefined, fallback: number, max: number) => Math.min(Math.max(value ?? fallback, 1), max);
+const MAX_COMMAND_CHARS = 100_000;
 
 function manifestOf(files: Map<string, Buffer>): { templateVersion: string; kitVersion: string } {
   const manifest = JSON.parse(files.get('.studio/manifest.json')?.toString('utf8') ?? '{}') as { templateVersion?: string };
@@ -340,7 +341,6 @@ export class StudioGraph {
       warmStudioDesign: async (_: unknown, args: Args, ctx: GraphContext) => {
         const { design, draft } = await this.design(ctx, args.design);
         void this.workspaces.forDraft(design, draft).catch(() => undefined);
-        if (args.for === 'chat') void this.browsers.openAgentPreview(design, draft).catch(() => undefined);
         return true;
       },
       runStudioDesignCheck: async (_: unknown, args: Args, ctx: GraphContext) => {
@@ -352,7 +352,7 @@ export class StudioGraph {
       runStudioCommand: async (_: unknown, args: Args, ctx: GraphContext) => {
         await this.design(ctx, args.design);
         const command = String(args.command);
-        if (!command.trim() || command.length > 20_000) throw new BadRequestException('A command has 1 to 20000 characters');
+        if (!command.trim() || command.length > MAX_COMMAND_CHARS) throw new BadRequestException(`A command has 1 to ${MAX_COMMAND_CHARS} characters`);
         const answer = await this.terminal.run({ store: storeOf(ctx), designId: args.design, actor: ctx.actor }, command);
         const result = answer.result;
         return {

@@ -101,10 +101,6 @@ export class BrowserSessions implements OnModuleInit {
     }
   }
 
-  async openAgentPreview(design: Design, draft: Draft): Promise<void> {
-    await this.withAgentPage(design, draft, {}, async () => undefined);
-  }
-
   async emulate(page: Page, device: Device): Promise<void> {
     const spec = DEVICES[device];
     const cdp = await page.context().newCDPSession(page);

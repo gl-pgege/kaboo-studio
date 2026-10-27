@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -350,7 +350,10 @@ async function promote(expected) {
 
 function runCommand(command, timeoutMs) {
   const started = performance.now();
-  const result = spawnSync('bash', ['-lc', `{\n${command}\n} 2>&1`], { cwd: root, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
+  const script = path.join(stateDir, 'command.sh');
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(script, `{\n${command}\n} 2>&1\n`);
+  const result = spawnSync('bash', ['-l', script], { cwd: root, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
   const output = `${result.stdout ?? ''}${result.error ? `\n${result.error.message}` : ''}`;
   const exitCode = result.status ?? (result.signal ? 124 : 1);
   return {
