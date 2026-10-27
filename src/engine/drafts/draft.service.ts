@@ -241,6 +241,12 @@ export class DraftService {
       if (session.draftId) await this.workspaces.discard(session.draftId);
       throw new SandboxError('The workspace stopped unexpectedly. Run the command again to start a fresh one.');
     }
+    const result = await this.parse(session, output);
+    for (const [phase, ms] of Object.entries(result.timings ?? {})) metrics.stage(`toolchain-${phase.replace(/Ms$/, '')}`, ms);
+    return result;
+  }
+
+  private async parse(session: OpenSession, output: { stdout: string; stderr: string }): Promise<SyncResult> {
     try {
       return parseSyncOutput(output.stdout, output.stderr);
     } catch (error) {

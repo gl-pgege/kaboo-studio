@@ -79,23 +79,54 @@ export function auditableUrl(input: string): URL {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function loadForAudit(page: Page, url: URL): Promise<number | null> {
-  const response = await page.goto(url.toString(), { waitUntil: 'load', timeout: 45_000 });
-  if (/^\/d\//.test(url.pathname)) {
-    await page
-      .waitForFunction(() => Boolean(document.querySelector('#studio-root')?.childElementCount) && (window as unknown as { __studio?: { pending: number } }).__studio?.pending === 0, null, { timeout: 15_000, polling: 100 })
-      .catch(() => undefined);
-  } else {
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
+const READY_MS = 15_000;
+
+export async function settle(page: Page): Promise<string[]> {
+  const ready = () =>
+    Boolean(document.querySelector('#studio-root')?.childElementCount) &&
+    (window as unknown as { __studio?: { pending: number } }).__studio?.pending === 0 &&
+    !document.querySelector('[aria-busy="true"]');
+  const settled = await page
+    .waitForFunction(ready, null, { timeout: READY_MS, polling: 100 })
+    .then(() => sleep(100))
+    .then(() => page.waitForFunction(ready, null, { timeout: READY_MS, polling: 100 }))
+    .then(
+      () => true,
+      () => false,
+    );
+  if (settled) {
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => done(null)))));
+    return [];
   }
+  const state = await page.evaluate(() => ({
+    rendered: Boolean(document.querySelector('#studio-root')?.childElementCount),
+    pending: (window as unknown as { __studio?: { pending: number } }).__studio?.pending ?? 0,
+    busy: [...document.querySelectorAll('[aria-busy="true"]')]
+      .map(element => (element.closest('[aria-label]')?.getAttribute('aria-label') ?? element.textContent ?? '').trim().slice(0, 60))
+      .filter(Boolean),
+  }));
+  const parts = [
+    ...(state.rendered ? [] : ['nothing rendered']),
+    ...(state.pending ? [`${state.pending} request${state.pending === 1 ? '' : 's'} still pending`] : []),
+    ...(state.busy.length ? [`still loading: ${[...new Set(state.busy)].slice(0, 8).join(', ')}`] : []),
+  ];
+  return [`The page was not ready after ${READY_MS / 1000} s: ${parts.join('; ') || 'it kept changing'}.`];
+}
+
+export async function loadForAudit(page: Page, url: URL): Promise<{ status: number | null; unsettled: string[] }> {
+  const response = await page.goto(url.toString(), { waitUntil: 'load', timeout: 45_000 });
+  const status = response?.status() ?? null;
+  if (/^\/d\//.test(url.pathname)) return { status, unsettled: await settle(page) };
+  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
   await sleep(1000);
-  return response?.status() ?? null;
+  return { status, unsettled: [] };
 }
 
 export async function prepare(context: BrowserContext, device: AuditDevice, throttle: boolean): Promise<Page> {
   await context.addInitScript(VITALS);
   const page = await context.newPage();
   page.setDefaultTimeout(20_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   if (device === 'mobile' && throttle) {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Network.enable');
@@ -107,7 +138,7 @@ export async function prepare(context: BrowserContext, device: AuditDevice, thro
 
 export async function auditPage(page: Page, url: URL, device: AuditDevice): Promise<{ audit: DeviceAudit; links: string[] }> {
   const started = Date.now();
-  const status = await loadForAudit(page, url);
+  const { status } = await loadForAudit(page, url);
   const loadMs = Date.now() - started;
   const vitals = await page.evaluate(() => {
     const v = (window as unknown as { __studioVitals?: { lcp: number; cls: number; fcp: number; longTasks: Array<[number, number]> } }).__studioVitals;

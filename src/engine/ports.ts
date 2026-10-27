@@ -38,5 +38,5 @@ export abstract class EventSink {
 }
 
 export abstract class CheckPack {
-  abstract run(page: Page, productUrl: string): Promise<CheckOutcome[]>;
+  abstract run(page: Page, url: string): Promise<CheckOutcome[]>;
 }

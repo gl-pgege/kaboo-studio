@@ -1,9 +1,12 @@
 import type { ChangeResult, Diagnostic } from '../../contract';
 
 const PREVIEW_TOKEN = /\/(d|_studio\/(?:preview|check))\/([^/\s"']+\/)?[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g;
+const ANY_TOKEN = /\/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}(?=[/?\s"']|$)/g;
 
 export function withoutTokens(value: string): string {
-  return value.replace(PREVIEW_TOKEN, (_match, kind: string, design?: string) => (kind === 'd' ? `/d/${design ?? ''}<preview>` : `/${kind}/<preview>`));
+  return value
+    .replace(PREVIEW_TOKEN, (_match, kind: string, design?: string) => (kind === 'd' ? `/d/${design ?? ''}<preview>` : `/${kind}/<preview>`))
+    .replace(ANY_TOKEN, '/<preview>');
 }
 
 const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;

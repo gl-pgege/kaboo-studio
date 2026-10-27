@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
-import { latestTypes, treeId as sandboxTreeId } from '../toolchain/sync.mjs';
+import { latestTypes, lintResult, treeId as sandboxTreeId, typeResult } from '../toolchain/sync.mjs';
 import { parseSyncOutput } from '../dist/engine/drafts/sync-result.js';
 import { treeId } from '../dist/engine/versions/tree.js';
 
@@ -115,6 +115,30 @@ test("a check reads the watcher's first full pass after the latest change, then 
   assert.deepEqual(checked.types, [{ file: 'app/blocks/Kpi.tsx', line: 1, column: 14, rule: 'TS2322', message: "Type 'string' is not assignable to type 'number'." }]);
   assert.equal(existsSync(path.join(dir, '.studio/state/types-since.json')), false);
   await rm(path.join(dir, '.studio/state/tsc.pid'));
+});
+
+test('a type check that did not finish says so instead of reporting no errors', () => {
+  assert.deepEqual(typeResult({ status: 0, stdout: '' }), []);
+  assert.deepEqual(typeResult({ status: 2, stdout: "app/a.tsx(3,7): error TS7006: Parameter 'p' implicitly has an 'any' type.\n" }), [
+    { file: 'app/a.tsx', line: 3, column: 7, rule: 'TS7006', message: "Parameter 'p' implicitly has an 'any' type." },
+  ]);
+  const killed = typeResult({ status: null, signal: 'SIGTERM', error: Object.assign(new Error('spawnSync npx ETIMEDOUT'), { code: 'ETIMEDOUT' }), stdout: '' });
+  assert.equal(killed.length, 1);
+  assert.match(killed[0].message, /did not finish \(it ran out of time\), so types were not checked/);
+  const crashed = typeResult({ status: 1, stdout: 'error TS5083: Cannot read file tsconfig.json.\n', stderr: '' });
+  assert.match(crashed[0].message, /TS5083: Cannot read file tsconfig\.json/);
+});
+
+test('lint that did not run says so instead of reporting no errors', () => {
+  const report = JSON.stringify([{ filePath: 'app/a.tsx', messages: [{ severity: 2, line: 1, column: 2, ruleId: 'no-explicit-any', message: 'Unexpected any.' }] }]);
+  assert.deepEqual(lintResult({ status: 1, stdout: report }, ['app/a.tsx']), [
+    { file: 'app/a.tsx', line: 1, column: 2, rule: 'no-explicit-any', message: 'Unexpected any.' },
+  ]);
+  assert.deepEqual(lintResult({ status: 0, stdout: '[]' }, ['app/a.tsx']), []);
+  const fatal = lintResult({ status: 2, stdout: '', stderr: 'Oops! Something went wrong! ESLint could not find the config.' }, ['app/a.tsx', 'app/b.tsx']);
+  assert.equal(fatal.length, 1);
+  assert.match(fatal[0].message, /Lint did not run \(Oops! Something went wrong! ESLint could not find the config\.\), so 2 file\(s\) were not linted/);
+  assert.match(lintResult({ status: 1, stdout: 'not json' }, ['app/a.tsx'])[0].message, /Lint did not run/);
 });
 
 test('writes cannot leave the design folder', async () => {

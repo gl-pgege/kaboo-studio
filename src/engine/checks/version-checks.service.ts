@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma, type Design, type Draft } from '../../generated/prisma/client';
 import type { Page } from 'playwright-core';
-import { CheckPack, type TerminalCaller } from '../ports';
+import { CheckPack, SiteDirectory, type TerminalCaller } from '../ports';
 import { BrowserSessions } from '../browser/browser-sessions.service';
 import { flowSchema, runFlow } from '../browser/flows';
 import { WCAG_TAGS } from '../browser/page-audit';
@@ -39,6 +39,15 @@ export function settleNetwork(page: Page) {
   return page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => undefined);
 }
 
+const MAX_ROUTES = 8;
+
+export function checkedRoutes(pages: string[]): string[] {
+  const routes = pages
+    .map(file => `/${file.replace(/index\.html$/, '')}`)
+    .sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b));
+  return routes.length ? routes.slice(0, MAX_ROUTES) : ['/'];
+}
+
 @Injectable()
 export class VersionChecks implements OnModuleInit {
   private readonly logger = new Logger(VersionChecks.name);
@@ -55,6 +64,7 @@ export class VersionChecks implements OnModuleInit {
     private readonly queue: StudioQueue,
     private readonly writers: WritersService,
     private readonly checkPack: CheckPack,
+    private readonly sites: SiteDirectory,
   ) {}
 
   onModuleInit() {
@@ -157,9 +167,9 @@ export class VersionChecks implements OnModuleInit {
     const archive = await this.storage.get(archiveKey);
     const pages = archive ? (await unpackToStorage(this.storage, archive, `stores/${design.store}/checks/${tree}/client`)).filter(file => file.endsWith('index.html')) : [];
     const build = { ok: true, ms: Date.now() - started, pages: pages.length, output: null };
-    const product = pages.find(file => file.startsWith('products/'))?.replace(/index\.html$/, '');
-    const collection = pages.find(file => file.startsWith('collections/'))?.replace(/index\.html$/, '');
-    const routes = ['/', ...(product ? [`/${product}`] : []), ...(collection ? [`/${collection}`] : []), '/cart'];
+    const routes = checkedRoutes(pages);
+    const hints = (await this.sites.previewConfig(design.store, design.id)).hints as { api?: { path?: string } } | undefined;
+    const hostApi = hints?.api?.path ?? null;
     const flowFiles = [...files.keys()].filter(file => /^tests\/flows\/[a-z0-9-]+\.json$/.test(file));
     const origin = config.previewOrigin;
     const results = await this.browsers.withFreshContext(design.store, draft.id, 'phone', async context => {
@@ -168,31 +178,32 @@ export class VersionChecks implements OnModuleInit {
       const errors: string[] = [];
       page.on('pageerror', error => errors.push(error.message));
       page.on('console', message => {
-        if (message.type() === 'error' && !/favicon/.test(message.text())) errors.push(message.text().slice(0, 300));
+        if (message.type() !== 'error' || /favicon/.test(message.text())) return;
+        if (hostApi && new URL(message.location().url || origin, origin).pathname.includes(hostApi)) return;
+        errors.push(message.text().slice(0, 300));
       });
       const routeResults: CheckResult['routes'] = [];
       const accessibility: CheckResult['accessibility'] = [];
+      const contract: CheckResult['contract'] = [];
       for (const route of routes) {
         errors.length = 0;
         const problems: string[] = [];
-        const response = await page.goto(`${origin}${base.slice(0, -1)}${route}`, { waitUntil: 'load', timeout: 30_000 }).catch(error => {
+        const url = `${origin}${base.slice(0, -1)}${route}`;
+        const response = await page.goto(url, { waitUntil: 'load', timeout: 30_000 }).catch(error => {
           problems.push(`didn't load: ${String(error).split('\n')[0]}`);
           return null;
         });
         await settleNetwork(page);
         if (response && response.status() >= 400) problems.push(`answered ${response.status()}`);
-        if (route !== '/cart' && !(await page.locator('h1').count())) problems.push('has no h1');
         if ((await page.locator('[data-not-found]').count()) > 0) problems.push('shows the not-found page');
         problems.push(...errors.map(error => `error: ${error}`));
         routeResults.push({ path: route, ok: problems.length === 0, problems });
-        if (route === '/' || route === `/${product}`) {
-          const axe = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze().catch(() => null);
-          for (const violation of axe?.violations ?? []) {
-            if (violation.impact === 'serious' || violation.impact === 'critical') accessibility.push({ path: route, rule: violation.id, impact: violation.impact, help: violation.help, count: violation.nodes.length });
-          }
+        const axe = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze().catch(() => null);
+        for (const violation of axe?.violations ?? []) {
+          if (violation.impact === 'serious' || violation.impact === 'critical') accessibility.push({ path: route, rule: violation.id, impact: violation.impact, help: violation.help, count: violation.nodes.length });
         }
+        for (const outcome of await this.checkPack.run(page, url)) contract.push(routes.length > 1 ? { ...outcome, check: `${route} ${outcome.check}` } : outcome);
       }
-      const contract = product ? await this.checkPack.run(page, `${origin}${base.slice(0, -1)}/${product}`) : [{ check: 'a product page to test on', ok: false, detail: 'the build prerendered no product page' }];
       const flows: CheckResult['flows'] = [];
       for (const file of flowFiles) {
         const parsed = flowSchema.safeParse(JSON.parse(files.get(file)!.toString('utf8')));
@@ -230,7 +241,7 @@ export class VersionChecks implements OnModuleInit {
     return {
       tree,
       status: failures.length ? 'failed' : 'passed',
-      summary: failures.length ? `${failures.length} problem${failures.length === 1 ? '' : 's'}: ${failures.slice(0, 3).join('; ')}${failures.length > 3 ? '…' : ''}` : `Built ${build.pages} pages; ${routes.length} routes, accessibility, the kit contract${flows.length ? ` and ${flows.length} flow${flows.length === 1 ? '' : 's'}` : ''} passed`,
+      summary: failures.length ? `${failures.length} problem${failures.length === 1 ? '' : 's'}: ${failures.slice(0, 3).join('; ')}${failures.length > 3 ? '…' : ''}` : `Built ${build.pages} pages; ${routes.length} routes, accessibility, the host's checks${flows.length ? ` and ${flows.length} flow${flows.length === 1 ? '' : 's'}` : ''} passed`,
       build,
       routes,
       accessibility,

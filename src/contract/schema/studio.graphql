@@ -208,6 +208,8 @@ type StudioImage {
     width: Int!
     height: Int!
     mimeType: String!
+    "What the picture may not show as it should: what was still loading when it was taken, or that the page kept changing."
+    notes: [String!]!
 }
 
 "What a command did in the design's workspace."

@@ -60,7 +60,8 @@ serve its own REST or MCP surface on top of them.
   fetch from) and `hints`, the messages agents see when a preview breaks a
   rule (blocked requests and pictures, an API the design talks to).
 - **`EventSink`**: where version and live events go.
-- **`CheckPack`**: product checks run on each version.
+- **`CheckPack`**: the host's own checks, run on every page a version's build
+  prerendered.
 
 ## Writers and holds
 
@@ -83,6 +84,15 @@ the latest draft once: it compiles every module, reads the type watcher's pass
 after the last change (or runs `tsc` when routes or packages changed), lints
 every app file, renders the home page, and keeps the result for that draft.
 
+A version check builds the version for production and visits every page the
+build prerendered, up to eight. On each page it records:
+- whether it loads, and any errors thrown or logged;
+- axe's WCAG violations;
+- the host's `CheckPack` results.
+
+Failures of the host's declared API (`hints.api`) are not counted, because the
+static build has no preview data to fetch.
+
 ## Configuration
 
 Environment variables, read when the engine loads. A host that wants its own
@@ -103,6 +113,7 @@ defaults sets them before importing the module.
 | `STUDIO_SANDBOX_IMAGE` | `kaboo-studio/sandbox:local` | The Docker image built from `toolchain/` |
 | `STUDIO_PREVIEW_ORIGIN`, `STUDIO_PREVIEW_PARENT_ORIGINS`, `STUDIO_PREVIEW_SECRET` | local | The preview app's origin, the pages that may frame it, and the token secret |
 | `STUDIO_INTERNAL_KEY` | none | The key internal callers present |
+| `STUDIO_METRICS` | `off` | `emf` writes stage timings (`StageDuration` by `Stage`) as CloudWatch embedded metric format lines on stdout. Stages include `sync`, `diagnose`, `health-render`, `screenshot` and each toolchain phase (`toolchain-types`, `toolchain-lint`, `toolchain-compile`, …) |
 | `DATABASE_URL`, `REDIS_HOST`, `REDIS_PORT` | | Postgres (the `studio` schema) and Redis |
 
 ## Running it

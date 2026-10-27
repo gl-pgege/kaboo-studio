@@ -23,6 +23,18 @@ export class PageInspector {
     return page.screenshot({ type: 'jpeg', quality: 65, fullPage: true, clip: { x: 0, y: 0, width, height } });
   }
 
+  async stableScreenshot(page: Page, full = false, withinMs = 3000): Promise<{ jpeg: Buffer; stable: boolean }> {
+    const started = Date.now();
+    let previous = await this.screenshot(page, null, full);
+    while (Date.now() - started < withinMs) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const next = await this.screenshot(page, null, full);
+      if (next.equals(previous)) return { jpeg: next, stable: true };
+      previous = next;
+    }
+    return { jpeg: previous, stable: false };
+  }
+
   async inspect(locator: Locator): Promise<Record<string, unknown>> {
     return locator.evaluate(element => {
       const style = getComputedStyle(element);
@@ -84,7 +96,10 @@ export class PageInspector {
       await this.browsers.withFreshContext(store, draftId, 'desktop', async context => {
         const page = await context.newPage();
         for (const target of targets) {
-          const status = await loadForAudit(page, new URL(target)).catch(() => null);
+          const status = await loadForAudit(page, new URL(target)).then(
+            loaded => loaded.status,
+            () => null,
+          );
           const problem = status == null ? "didn't load" : status >= 400 ? `answered ${status}` : (await page.locator('[data-not-found]').count()) > 0 ? 'shows a not-found page' : null;
           if (problem) broken.push({ href: shownPath(target), reason: problem });
         }

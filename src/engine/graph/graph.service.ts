@@ -30,6 +30,7 @@ import { studioErrorOf } from '../internal/studio-errors.filter';
 import { PreviewTokens } from '../preview/preview-tokens';
 import { StudioQueue } from '../queue/studio-queue';
 import { callWait } from '../scaling/admission';
+import { metrics } from '../scaling/metrics';
 import { TemplateService } from '../templates/template.service';
 import { withoutTokens } from '../terminal/output';
 import { TerminalService } from '../terminal/terminal.service';
@@ -199,7 +200,7 @@ export class StudioGraph {
         const recorded = draft.problems as unknown as DraftProblems | null;
         const [known, render, checked] = await Promise.all([
           recorded?.tree === draft.tree ? recorded : config.diagnoseOnChange ? null : this.drafts.diagnose(designId(args.design), store),
-          this.views.health(store, designId(args.design)),
+          metrics.time('health-render', () => this.views.health(store, designId(args.design))),
           this.checks.result(store, draft.tree),
         ]);
         const at = (item: Diagnostic) => `${item.file}${item.line ? `:${item.line}` : ''}`;
@@ -224,7 +225,8 @@ export class StudioGraph {
           checks: checked ? { status: checked.status, summary: checked.summary } : null,
         };
       },
-      studioPreviewShot: (_: unknown, args: Args, ctx: GraphContext) => this.views.shot(storeOf(ctx), designId(args.design), args.version ?? null, args.path ?? null, args.device ?? 'phone', args.fullPage === true),
+      studioPreviewShot: (_: unknown, args: Args, ctx: GraphContext) =>
+        metrics.time('screenshot', () => this.views.shot(storeOf(ctx), designId(args.design), args.version ?? null, args.path ?? null, args.device ?? 'phone', args.fullPage === true)),
       studioPreviewOutline: (_: unknown, args: Args, ctx: GraphContext) => this.views.outline(storeOf(ctx), designId(args.design), args.version ?? null, args.path ?? null, args.device ?? 'phone'),
       studioPreviewAudit: (_: unknown, args: Args, ctx: GraphContext) => this.views.audit(storeOf(ctx), designId(args.design), args.version ?? null, args.path ?? null, args.devices?.length ? args.devices : ['phone', 'desktop']),
       studioDesignFiles: async (_: unknown, args: Args, ctx: GraphContext) => {
@@ -364,7 +366,7 @@ export class StudioGraph {
           diagnostics: result ? diagnostics(result) : [],
           preview: result?.preview ?? null,
           faults: faultsOf(result?.preview),
-          screenshots: answer.images.map(imageOf),
+          screenshots: answer.images.map(image => imageOf(image)),
         };
       },
       deployStudioDesign: async (_: unknown, args: Args, ctx: GraphContext) => {

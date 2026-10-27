@@ -35,11 +35,21 @@ function fill(template: string, values: Record<string, string | number>) {
 
 const pathPattern = (path: string) => new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\?|/|$)`);
 
+export function reasonOf(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { message?: unknown };
+    if (typeof parsed?.message === 'string') return parsed.message;
+    if (Array.isArray(parsed?.message)) return parsed.message.join('; ');
+  } catch {}
+  return body.trim();
+}
+
 export function instrument(basename: string, allowedOrigins: string[] = [], hints: Hints = {}): StudioLog {
   const text = { ...DEFAULTS, ...hints };
   const origins = new Set([location.origin, ...allowedOrigins.map(origin => new URL(origin, location.href).origin)]);
   const pictures = new Set<string>();
   const apiPattern = hints.api ? pathPattern(hints.api.path) : null;
+  const mediaPattern = hints.media ? pathPattern(hints.media.path) : null;
   const log: StudioLog = {
     pending: 0,
     errors: [],
@@ -82,12 +92,15 @@ export function instrument(basename: string, allowedOrigins: string[] = [], hint
           })
           .catch(() => undefined);
       }
-      if (response.status >= 400 && !url.includes('/_studio/')) {
-        push(log.failed, api ? fill(api.status, { status: response.status, method, url: shown(url) }) : `${response.status} ${method} ${shown(url)}`);
+      if (response.status >= 400 && api) {
+        const message = reasonOf(await response.clone().text().catch(() => '')).slice(0, 300);
+        push(log.failed, fill(api.status, { status: response.status, method, url: shown(url), message: message || 'no reason given' }));
+      } else if (response.status >= 400 && !url.includes('/_studio/')) {
+        push(log.failed, `${response.status} ${method} ${shown(url)}`);
       }
       return response;
     } catch (error) {
-      if (!url.includes('/_studio/')) {
+      if (api || !url.includes('/_studio/')) {
         const reason = error instanceof Error ? error.message : String(error);
         push(log.failed, api ? fill(api.unreachable, { method, url: shown(url), reason }) : `failed ${method} ${shown(url)}: ${reason}`);
       }
@@ -111,7 +124,7 @@ export function instrument(basename: string, allowedOrigins: string[] = [], hint
       const source = String((target as HTMLImageElement).src);
       if (target.tagName === 'IMG') pictures.add(source);
       if (target.tagName !== 'IMG') push(log.failed, `failed to load ${shown(source)}`);
-      else if (hints.media && source.includes(hints.media.path)) push(log.failed, fill(hints.media.message, { source: shown(source) }));
+      else if (hints.media && mediaPattern?.test(source)) push(log.failed, fill(hints.media.message, { source: shown(source) }));
       else if (origins.has(new URL(source, location.href).origin)) push(log.failed, fill(text.missingPicture, { source: shown(source) }));
       else push(log.failed, fill(text.externalPicture, { source }));
     },

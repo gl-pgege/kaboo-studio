@@ -186,6 +186,29 @@ export function lintErrors(reports) {
   return out;
 }
 
+function why(result) {
+  if (result.error?.code === 'ETIMEDOUT' || result.signal) return 'it ran out of time';
+  const said = `${result.stderr ?? ''}\n${result.stdout ?? ''}`.split('\n').map(line => line.trim()).filter(Boolean).slice(-2).join(' ');
+  return said || `it exited with ${result.status}`;
+}
+
+const unchecked = (file, message) => [{ file, line: null, column: null, rule: null, message }];
+
+export function typeResult(result) {
+  const types = typeErrors(result.stdout ?? '');
+  if (types.length || (result.status === 0 && !result.error)) return types;
+  return unchecked('tsconfig.json', `The type check did not finish (${why(result)}), so types were not checked.`);
+}
+
+export function lintResult(result, files) {
+  if (!result.error && (result.status === 0 || result.status === 1)) {
+    try {
+      return lintErrors(JSON.parse(result.stdout || '[]'));
+    } catch {}
+  }
+  return unchecked('eslint.config.js', `Lint did not run (${why(result)}), so ${files.length} file(s) were not linted.`);
+}
+
 function alive(pidFile) {
   const pid = Number(readFileSyncSafe(pidFile));
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -226,11 +249,12 @@ async function waitForTypes(offset, timeoutMs) {
 }
 
 function coldTypes() {
-  return typeErrors(spawnSync('npx', ['--no-install', 'tsc', '--noEmit', '--pretty', 'false'], { cwd: root, encoding: 'utf8', timeout: 300_000 }).stdout ?? '');
+  return typeResult(spawnSync('npx', ['--no-install', 'tsc', '--noEmit', '--pretty', 'false'], { cwd: root, encoding: 'utf8', timeout: 300_000 }));
 }
 
 function typegen() {
-  spawnSync('npx', ['--no-install', 'react-router', 'typegen'], { cwd: root, encoding: 'utf8', timeout: 60_000 });
+  const result = spawnSync('npx', ['--no-install', 'react-router', 'typegen'], { cwd: root, encoding: 'utf8', timeout: 60_000 });
+  return result.status === 0 && !result.error ? [] : unchecked('app/routes.ts', `Route types could not be generated (${why(result)}).`);
 }
 
 function watching() {
@@ -241,11 +265,11 @@ async function diagnose(touched, offset) {
   const started = performance.now();
   const packagesChanged = touched.includes('package-lock.json');
   const typedChange = packagesChanged || touched.some(file => TYPED.test(file));
-  if (touched.some(file => ROUTE_SHAPE.test(file))) typegen();
+  const generated = touched.some(file => ROUTE_SHAPE.test(file)) ? typegen() : [];
   let types = [];
   if (typedChange) types = (!packagesChanged && watching() ? await waitForTypes(offset, 8000) : null) ?? coldTypes();
   timings.typesMs = Math.round(performance.now() - started);
-  return { types, lint: await lintFiles(touched) };
+  return { types: [...generated, ...types], lint: await lintFiles(touched) };
 }
 
 export function latestTypes(log, offset) {
@@ -258,7 +282,7 @@ export function latestTypes(log, offset) {
 
 async function typesNow(since) {
   const started = performance.now();
-  if (since?.typegen) typegen();
+  const generated = since?.typegen ? typegen() : [];
   let types = null;
   if (!since?.typegen && !since?.packages && watching()) {
     for (let waited = 0; waited < 8000 && types === null; waited += 40) {
@@ -267,7 +291,7 @@ async function typesNow(since) {
     }
   }
   timings.typesMs = Math.round(performance.now() - started);
-  return types ?? coldTypes();
+  return [...generated, ...(types ?? coldTypes())];
 }
 
 async function noteUnchecked(changed, deleted, known, offset) {
@@ -311,15 +335,9 @@ async function lintFiles(files) {
         await rm(answer, { force: true });
       }
     }
-    if (!reports) {
-      const cold = spawnSync('npx', ['--no-install', 'eslint', '--format', 'json', ...lintable], { cwd: root, encoding: 'utf8', timeout: 120_000, maxBuffer: 16 * 1024 * 1024 });
-      try {
-        reports = JSON.parse(cold.stdout || '[]');
-      } catch {
-        reports = [];
-      }
-    }
-    lint = lintErrors(reports);
+    lint = reports
+      ? lintErrors(reports)
+      : lintResult(spawnSync('npx', ['--no-install', 'eslint', '--format', 'json', ...lintable], { cwd: root, encoding: 'utf8', timeout: 120_000, maxBuffer: 16 * 1024 * 1024 }), lintable);
   }
   timings.lintMs = Math.round(performance.now() - lintStarted);
   return lint;

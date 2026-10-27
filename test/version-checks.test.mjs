@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { VersionChecks } from '../dist/engine/checks/version-checks.service.js';
+import { VersionChecks, checkedRoutes } from '../dist/engine/checks/version-checks.service.js';
 
 function checks(perform, status = 'active') {
   const rows = new Map();
@@ -18,13 +18,20 @@ function checks(perform, status = 'active') {
   const handlers = {};
   const queue = { register: (name, handler) => (handlers[name] = handler) };
   const writers = { lock: (_name, work) => work() };
-  const service = new VersionChecks(prisma, designs, {}, {}, {}, {}, {}, queue, writers, {});
+  const service = new VersionChecks(prisma, designs, {}, {}, {}, {}, {}, queue, writers, {}, {});
   service.perform = perform;
   service.onModuleInit();
   return { service, rows, design, handlers };
 }
 
 const passed = { tree: 'tree-1', status: 'passed', summary: 'Built 4 pages', build: { ok: true, ms: 1, pages: 4, output: null }, routes: [], accessibility: [], contract: [], flows: [], ranAt: '' };
+
+test('a check visits the pages the build prerendered, shallowest first, and never assumes others', () => {
+  assert.deepEqual(checkedRoutes(['index.html']), ['/']);
+  assert.deepEqual(checkedRoutes(['products/hat/index.html', 'index.html', 'about/index.html']), ['/', '/about/', '/products/hat/']);
+  assert.deepEqual(checkedRoutes([]), ['/']);
+  assert.equal(checkedRoutes(Array.from({ length: 20 }, (_, i) => `p${i}/index.html`)).length, 8);
+});
 
 test('a check that could not run is answered but not kept against the tree', async () => {
   const { service, rows, design } = checks(async () => {

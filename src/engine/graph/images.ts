@@ -3,6 +3,7 @@ export interface StudioImage {
   width: number;
   height: number;
   mimeType: string;
+  notes: string[];
 }
 
 function jpegSize(bytes: Buffer): { width: number; height: number } {
@@ -17,9 +18,9 @@ function jpegSize(bytes: Buffer): { width: number; height: number } {
   return { width: 0, height: 0 };
 }
 
-export function imageOf(bytes: Buffer): StudioImage {
+export function imageOf(bytes: Buffer, notes: string[] = []): StudioImage {
   const png = bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   const mimeType = png ? 'image/png' : 'image/jpeg';
   const size = png ? { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) } : jpegSize(bytes);
-  return { url: `data:${mimeType};base64,${bytes.toString('base64')}`, ...size, mimeType };
+  return { url: `data:${mimeType};base64,${bytes.toString('base64')}`, ...size, mimeType, notes };
 }

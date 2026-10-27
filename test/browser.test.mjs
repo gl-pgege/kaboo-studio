@@ -59,6 +59,7 @@ test('preview tokens never reach the agent', () => {
   const token = 'eyJkIjoiNDRkNTViZTMtYmYzOS00YTNhLTgwNmEtNzEwNjBmMzQ5NzFhIn0.uL4mo2VwgWoZYEtTJdCmOcH45_l46T_Yj6kxusmPxHo';
   assert.equal(withoutTokens(`net::ERR at http://preview.localhost:4300/d/44d5/${token}/products/x`), 'net::ERR at http://preview.localhost:4300/d/44d5/<preview>/products/x');
   assert.equal(withoutTokens(`GET /_studio/check/${token}/assets/a.js`), 'GET /_studio/check/<preview>/assets/a.js');
+  assert.equal(withoutTokens(`Data for /_studio/kaboo/data/${token}/q-5?params=%7B%7D failed (502)`), 'Data for /_studio/kaboo/data/<preview>/q-5?params=%7B%7D failed (502)');
   assert.equal(withoutTokens('plain output'), 'plain output');
 });
 
