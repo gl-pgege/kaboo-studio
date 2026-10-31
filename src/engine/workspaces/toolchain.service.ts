@@ -10,7 +10,7 @@ import type { Workspace, WorkspaceFile } from './workspace';
 
 export class ToolchainError extends Error {}
 
-const SESSION_SCRIPTS = ['sync.mjs', 'vendor.mjs', 'lint-daemon.mjs'];
+const SESSION_SCRIPTS = ['sync.mjs', 'vendor.mjs', 'lint-daemon.mjs', 'edit.mjs'];
 const TOKEN_SECONDS = 12 * 3600;
 const LONGEST_SESSION_MS = 8 * 3600_000;
 

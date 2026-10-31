@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { isUtf8 } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -15,6 +16,7 @@ const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.
 const MAX_TEXT_BYTES = 1024 * 1024;
 const MAX_IMAGE_BYTES = 200 * 1024;
 const MAX_OUTPUT = 512 * 1024;
+const NO_PYTHON = 'There is no Python on this machine: write scripts for node, and change files with edit.';
 
 const root = process.cwd();
 const stateDir = path.join(root, '.studio', 'state');
@@ -348,11 +350,26 @@ async function promote(expected) {
   if (pending && pending.tree === expected) await rename(path.join(stateDir, 'pending.json'), path.join(stateDir, 'known.json'));
 }
 
+function commandPreamble() {
+  const edit = path.join(root, '.studio', 'toolchain', 'edit.mjs').replace(/'/g, `'\\''`);
+  return [
+    `edit() { node '${edit}' "$@"; }`,
+    `: "\${STUDIO_HINT_python3:=${NO_PYTHON}}"`,
+    ': "${STUDIO_HINT_python:=$STUDIO_HINT_python3}"',
+    'for __hint in ${!STUDIO_HINT_@}; do',
+    '  __name=${__hint#STUDIO_HINT_}',
+    '  command -v "$__name" >/dev/null 2>&1 || eval "$__name() { printf \'%s\\n\' \\"\\${$__hint}\\" >&2; return 127; }"',
+    'done',
+    'unset __hint __name',
+    '',
+  ].join('\n');
+}
+
 function runCommand(command, timeoutMs) {
   const started = performance.now();
   const script = path.join(stateDir, 'command.sh');
   mkdirSync(stateDir, { recursive: true });
-  writeFileSync(script, `{\n${command}\n} 2>&1\n`);
+  writeFileSync(script, `${commandPreamble()}{\n${command}\n} 2>&1\n`);
   const result = spawnSync('bash', ['-l', script], { cwd: root, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
   const output = `${result.stdout ?? ''}${result.error ? `\n${result.error.message}` : ''}`;
   const exitCode = result.status ?? (result.signal ? 124 : 1);
@@ -415,6 +432,11 @@ async function main() {
     }
     if (protectedPaths.has(file) && known.tree && !step.allowProtected) {
       refused.push({ path: file, reason: 'This file is protected and was put back.' });
+      if (known.files[file]) current[file] = known.files[file];
+      continue;
+    }
+    if (!isBinary(buffer) && !isUtf8(buffer)) {
+      refused.push({ path: file, reason: 'This file isn’t valid UTF-8 text, so it was put back as it was. Write it again as UTF-8.' });
       if (known.files[file]) current[file] = known.files[file];
       continue;
     }

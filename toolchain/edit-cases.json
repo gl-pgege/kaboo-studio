@@ -1,0 +1,173 @@
+[
+  {
+    "name": "replaces a line with two and shows them with a line either side",
+    "file": "a\nb\nc\nd\n",
+    "input": "<<<<<<< SEARCH\nb\n=======\nB1\nB2\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 1 block.\npage.tsx:2-3\n   1| a\n   2| B1\n   3| B2\n   4| c",
+    "stderr": "",
+    "result": "a\nB1\nB2\nc\nd\n"
+  },
+  {
+    "name": "applies several blocks in one call",
+    "file": "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n",
+    "input": "<<<<<<< SEARCH\ntwo\n=======\nTWO\n>>>>>>> REPLACE\n<<<<<<< SEARCH\nnine\n=======\nNINE\nNINE-B\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 2 blocks.\npage.tsx:2\n   1| one\n   2| TWO\n   3| three\npage.tsx:9-10\n   8| eight\n   9| NINE\n  10| NINE-B\n  11| ten",
+    "stderr": "",
+    "result": "one\nTWO\nthree\nfour\nfive\nsix\nseven\neight\nNINE\nNINE-B\nten\n"
+  },
+  {
+    "name": "reports each block where it ends up when a later block adds lines above it",
+    "file": "one\ntwo\nthree\nfour\nfive\nsix\n",
+    "input": "<<<<<<< SEARCH\nfive\n=======\nFIVE\n>>>>>>> REPLACE\n<<<<<<< SEARCH\ntwo\n=======\nTWO\nTWO-B\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 2 blocks.\npage.tsx:6\n   5| four\n   6| FIVE\n   7| six\npage.tsx:2-3\n   1| one\n   2| TWO\n   3| TWO-B\n   4| three",
+    "stderr": "",
+    "result": "one\nTWO\nTWO-B\nthree\nfour\nFIVE\nsix\n"
+  },
+  {
+    "name": "removes lines when the replacement leaves them out",
+    "file": "a\nb\nc\n",
+    "input": "<<<<<<< SEARCH\na\nb\n=======\na\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 1 block.\npage.tsx:1\n   1| a\n   2| c",
+    "stderr": "",
+    "result": "a\nc\n"
+  },
+  {
+    "name": "empties a line when the replacement is empty",
+    "file": "a\nb\nc\n",
+    "input": "<<<<<<< SEARCH\nb\n=======\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 1 block.\npage.tsx:2\n   1| a\n   2| \n   3| c",
+    "stderr": "",
+    "result": "a\n\nc\n"
+  },
+  {
+    "name": "replaces a block of JSX as written, indentation included",
+    "file": "export default function Home() {\n  return (\n    <Card id=\"offers\" title=\"Renewal offers\">\n      <table className=\"w-full text-sm\">\n        <tbody>\n          {offers.map((offer) => (\n            <tr key={offer.id}><td>{offer.channel}</td></tr>\n          ))}\n        </tbody>\n      </table>\n    </Card>\n  );\n}\n",
+    "input": "<<<<<<< SEARCH\n      <table className=\"w-full text-sm\">\n        <tbody>\n          {offers.map((offer) => (\n            <tr key={offer.id}><td>{offer.channel}</td></tr>\n          ))}\n        </tbody>\n      </table>\n=======\n      <Table rows={offers} columns={[{ key: 'channel', label: 'Channel' }]} />\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 1 block.\npage.tsx:4\n   3|     <Card id=\"offers\" title=\"Renewal offers\">\n   4|       <Table rows={offers} columns={[{ key: 'channel', label: 'Channel' }]} />\n   5|     </Card>",
+    "stderr": "",
+    "result": "export default function Home() {\n  return (\n    <Card id=\"offers\" title=\"Renewal offers\">\n      <Table rows={offers} columns={[{ key: 'channel', label: 'Channel' }]} />\n    </Card>\n  );\n}\n"
+  },
+  {
+    "name": "refuses a block that matches nothing and shows the closest lines",
+    "file": "export default function Home() {\n  return (\n    <Card id=\"offers\" title=\"Renewal offers\">\n      <table className=\"w-full text-sm\">\n        <tbody>\n          {offers.map((offer) => (\n            <tr key={offer.id}><td>{offer.channel}</td></tr>\n          ))}\n        </tbody>\n      </table>\n    </Card>\n  );\n}\n",
+    "input": "<<<<<<< SEARCH\n<Card id=\"offers\" title=\"Renewal offers\">\n<table className=\"w-full text-sm\">\n=======\n<Card id=\"offers\" title=\"Offers\">\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: block 1 of 1 matches nothing in page.tsx, so nothing was changed. The closest lines, as they are now:\n   2|   return (\n   3|     <Card id=\"offers\" title=\"Renewal offers\">\n   4|       <table className=\"w-full text-sm\">\n   5|         <tbody>",
+    "result": "export default function Home() {\n  return (\n    <Card id=\"offers\" title=\"Renewal offers\">\n      <table className=\"w-full text-sm\">\n        <tbody>\n          {offers.map((offer) => (\n            <tr key={offer.id}><td>{offer.channel}</td></tr>\n          ))}\n        </tbody>\n      </table>\n    </Card>\n  );\n}\n"
+  },
+  {
+    "name": "says when nothing in the file resembles the block",
+    "file": "a\nb\n",
+    "input": "<<<<<<< SEARCH\nzzz qqq\n=======\nx\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: block 1 of 1 matches nothing in page.tsx, so nothing was changed. Nothing in it resembles the block's first line: read the file before editing it.",
+    "result": "a\nb\n"
+  },
+  {
+    "name": "refuses a block that matches several places and names their lines",
+    "file": "x\ny\nx\n",
+    "input": "<<<<<<< SEARCH\nx\n=======\nz\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: block 1 of 1 matches 2 places in page.tsx (lines 1, 3), so nothing was changed. Include more of the lines around it so it matches once.",
+    "result": "x\ny\nx\n"
+  },
+  {
+    "name": "changes nothing when a later block misses",
+    "file": "a\nb\nc\n",
+    "input": "<<<<<<< SEARCH\na\n=======\nA\n>>>>>>> REPLACE\n<<<<<<< SEARCH\nq\n=======\nQ\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: block 2 of 2 matches nothing in page.tsx, so nothing was changed. Nothing in it resembles the block's first line: read the file before editing it.",
+    "result": "a\nb\nc\n"
+  },
+  {
+    "name": "rejects text outside a block",
+    "file": "a\n",
+    "input": "hello\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: line 1 of the input is outside a block: start each block with <<<<<<< SEARCH.",
+    "result": "a\n"
+  },
+  {
+    "name": "needs a divider in each block",
+    "file": "a\n",
+    "input": "<<<<<<< SEARCH\na\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: block 1 needs a ======= line between the text to find and what it becomes.",
+    "result": "a\n"
+  },
+  {
+    "name": "needs each block closed",
+    "file": "a\n",
+    "input": "<<<<<<< SEARCH\na\n=======\nb\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: block 1 needs a >>>>>>> REPLACE line to close it.",
+    "result": "a\n"
+  },
+  {
+    "name": "needs something to find",
+    "file": "a\n",
+    "input": "<<<<<<< SEARCH\n\n=======\nb\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: block 1 has nothing to find: put the current text between <<<<<<< SEARCH and =======.",
+    "result": "a\n"
+  },
+  {
+    "name": "needs at least one block",
+    "file": "a\n",
+    "input": "",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: no blocks to apply.\nUsage: edit <file> <<'EOF'\n<<<<<<< SEARCH\nthe text to replace, exactly as it is now\n=======\nwhat it becomes\n>>>>>>> REPLACE\nEOF\nEach search must match exactly once. Several blocks may follow one another: they all apply, or none does.",
+    "result": "a\n"
+  },
+  {
+    "name": "accepts markers with trailing spaces",
+    "file": "a\nb\n",
+    "input": "<<<<<<< SEARCH  \na\n=======  \nA\n>>>>>>> REPLACE \n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 1 block.\npage.tsx:1\n   1| A\n   2| b",
+    "stderr": "",
+    "result": "A\nb\n"
+  },
+  {
+    "name": "leaves the file alone when nothing would change",
+    "file": "a\nb\n",
+    "input": "<<<<<<< SEARCH\na\n=======\na\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "page.tsx is unchanged: each block already reads as its replacement.",
+    "stderr": "",
+    "result": "a\nb\n"
+  },
+  {
+    "name": "shortens a long changed region",
+    "file": "start\nold\nend\n",
+    "input": "<<<<<<< SEARCH\nold\n=======\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\n>>>>>>> REPLACE\n",
+    "exit": 0,
+    "stdout": "Changed page.tsx: 1 block.\npage.tsx:2-21\n   1| start\n   2| line 1\n   3| line 2\n   4| line 3\n   5| line 4\n    …\n  18| line 17\n  19| line 18\n  20| line 19\n  21| line 20\n  22| end",
+    "stderr": "",
+    "result": "start\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nend\n"
+  },
+  {
+    "name": "says a missing file has to be created first",
+    "file": null,
+    "input": "<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE\n",
+    "exit": 1,
+    "stdout": "",
+    "stderr": "edit: page.tsx does not exist. Create a file with: cat > page.tsx <<'EOF' … EOF",
+    "result": null
+  }
+]

@@ -83,6 +83,17 @@ test('large photos are refused and new ones are left out of the tree', async () 
   await rm(path.join(dir, 'big.png'));
 });
 
+test('text that is not valid UTF-8 is refused and kept in the tree as it was', async () => {
+  const known = JSON.parse(await readFile(path.join(dir, '.studio/state/known.json'), 'utf8'));
+  const before = await readFile(path.join(dir, 'app/blocks/Hero.tsx'));
+  const result = await step({ run: "printf 'hero \\226 dash' > app/blocks/Hero.tsx" });
+  assert.deepEqual(result.changed, []);
+  assert.deepEqual(result.refused.map(entry => entry.path), ['app/blocks/Hero.tsx']);
+  assert.match(result.refused[0].reason, /UTF-8/);
+  assert.equal(result.tree, known.tree);
+  await put('app/blocks/Hero.tsx', before);
+});
+
 test('writes and deletes apply before the scan, and a failing command still reports its exit code', async () => {
   const result = await step({ write: { 'app/new.ts': { text: 'export {}' } }, delete: ['app/blocks/Hero.tsx'], run: 'exit 3' });
   assert.equal(result.command.exitCode, 3);
@@ -147,6 +158,38 @@ test('lint that did not run says so instead of reporting no errors', () => {
   assert.equal(fatal.length, 1);
   assert.match(fatal[0].message, /Lint did not run \(Oops! Something went wrong! ESLint could not find the config\.\), so 2 file\(s\) were not linted/);
   assert.match(lintResult({ status: 1, stdout: 'not json' }, ['app/a.tsx'])[0].message, /Lint did not run/);
+});
+
+test('edit changes a file from inside a command, and the change is sent', async () => {
+  await mkdir(path.join(dir, '.studio/toolchain'), { recursive: true });
+  await writeFile(path.join(dir, '.studio/toolchain/edit.mjs'), await readFile(path.resolve(here, '../toolchain/edit.mjs')));
+  await put('app/blocks/Edit.tsx', 'const a = 1;\nconst b = 2;\n');
+  const result = await step({ run: "cd app && edit blocks/Edit.tsx <<'EOF'\n<<<<<<< SEARCH\nconst b = 2;\n=======\nconst b = 3;\n>>>>>>> REPLACE\nEOF" });
+  assert.equal(result.command.exitCode, 0);
+  assert.match(result.command.output, /Changed blocks\/Edit\.tsx: 1 block\./);
+  assert.equal(result.changed.find(entry => entry.path === 'app/blocks/Edit.tsx')?.text, 'const a = 1;\nconst b = 3;\n');
+});
+
+test('a command the machine lacks answers with the hint the host gave, and exits 127', async () => {
+  process.env.STUDIO_HINT_studio_missing_tool = 'Use the other machine for that.';
+  try {
+    const result = await step({ run: 'studio_missing_tool --version; echo "exit $?"; echo "$STUDIO_HINT_python3"' });
+    assert.match(result.command.output, /Use the other machine for that\.\nexit 127/);
+    assert.match(result.command.output, /There is no Python on this machine: write scripts for node, and change files with edit\./);
+  } finally {
+    delete process.env.STUDIO_HINT_studio_missing_tool;
+  }
+});
+
+test('a hint never hides a command the machine has', async () => {
+  process.env.STUDIO_HINT_node = 'not here';
+  try {
+    const result = await step({ run: "node -e \"console.log('the real node')\"" });
+    assert.match(result.command.output, /the real node/);
+    assert.doesNotMatch(result.command.output, /not here/);
+  } finally {
+    delete process.env.STUDIO_HINT_node;
+  }
 });
 
 test('writes cannot leave the design folder', async () => {

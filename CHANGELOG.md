@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.4 (2026-10-31)
+
+- Terminal commands get `edit <file>`, which replaces exact text from
+  search/replace blocks on standard input. Each search must match exactly once,
+  the blocks of one call apply together or not at all, and the reply shows each
+  changed region with its line numbers, so an agent no longer reads lines back
+  to find the numbers a `sed` edit needs. `toolchain/edit-cases.json` holds its
+  test cases, for a host that offers `edit` on another machine.
+- A command the machine lacks says what to use instead and exits 127. The text
+  comes from `STUDIO_HINT_<command>` in the design's environment; `python3` and
+  `python` have one by default, and a command the machine has is never hidden.
+- A changed file that is not valid UTF-8 text is refused and put back as it
+  was.
+
 ## 0.2.3 (2026-10-27)
 
 - A terminal command holds up to 100,000 characters, up from 20,000, so one

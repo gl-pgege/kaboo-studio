@@ -55,7 +55,8 @@ serve its own REST or MCP surface on top of them.
 ### The host ports
 
 - **`SiteDirectory`**: a store's site (code, name, URL), the environment a
-  design's build gets, and the preview config the preview app hands the
+  design's build and terminal commands get (including `STUDIO_HINT_<command>`
+  variables, below), and the preview config the preview app hands the
   design. The preview config may carry `assetOrigin` (an origin the design may
   fetch from) and `hints`, the messages agents see when a preview breaks a
   rule (blocked requests and pictures, an API the design talks to).
@@ -72,6 +73,34 @@ until the run ends (`endStudioRun`), when the engine cuts one version of each
 design the run changed. File saves check each file's `baseHash`, the hash the
 writer last saw, so a stale whole-file write comes back as a conflict instead
 of overwriting someone else's work.
+
+## Commands in a workspace
+
+A terminal command runs in bash with two additions:
+
+- **`edit <file>`** replaces exact text in a file, from search/replace blocks on
+  standard input:
+
+  ```bash
+  edit app/routes/home.tsx <<'EOF'
+  <<<<<<< SEARCH
+  the text as it is now
+  =======
+  what it becomes
+  >>>>>>> REPLACE
+  EOF
+  ```
+
+  Each search must match exactly once, and the blocks of one call apply
+  together or not at all. The reply shows each changed region with its line
+  numbers; a miss changes nothing and shows the closest lines. Nothing needs
+  reading back first. `toolchain/edit-cases.json` holds the cases `edit` is
+  tested against, so a host can hold an `edit` on another machine to the same
+  behaviour.
+- **A command the machine lacks says what to use instead.** For each
+  `STUDIO_HINT_<command>` variable in the design's environment, a missing
+  `<command>` prints the variable's text and exits 127. `python3` and `python`
+  have one by default. A command the machine has is never hidden.
 
 ## Checks
 
